@@ -1,0 +1,3 @@
+[submodule "pythonlib/deeplearning"]
+	path = pythonlib/deeplearning
+	url = git@gitee.com:xtudbxk/deeplearning.git
