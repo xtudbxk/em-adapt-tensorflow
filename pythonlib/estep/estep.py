@@ -12,23 +12,20 @@ if os.path.exists(libweaklabel_path) is False:
     assert os.path.exists(libweaklabel_path),"error, cannot find libweaklabel.so"
 
 estep_lib = cdll.LoadLibrary("/home/xtudbxk/git/em-adapt/pythonlib/estep/libweaklabel.so")
-estep_lib.e_step.argtypes=[POINTER(c_float),POINTER(c_int),POINTER(c_int),POINTER(c_int),c_bool,c_int,c_float,c_float,c_float]
+estep_lib.e_step.argtypes=[POINTER(c_float),POINTER(c_int),POINTER(c_int),POINTER(c_int),POINTER(c_int),c_bool,c_int,c_float,c_float,c_float]
 #estep_lib.e_step.argtypes=[POINTER(c_float),POINTER(c_int),POINTER(c_int)]
 
 def estep(feature_map,label,suppress_others=True,num_iter=5,margin_others=1e-5,bg_p=0.5,fg_p=0.25,use_c=False):
     if use_c is True:
-        f_map = copy.deepcopy(feature_map)
-        data = {"f":feature_map,"l":label}
-        with open("tmp.pickle","wb") as f:
-            pickle.dump(data,f)
-            print("saved")
-        f = estep_c(f_map,label,suppress_others,num_iter,margin_others,bg_p,fg_p)
+        feature_map = feature_map.astype(c_float)
+        label = label.astype(c_int)
+        f = estep_c(feature_map,label,suppress_others,num_iter,margin_others,bg_p,fg_p)
     else:
         f = estep_py(feature_map,label,suppress_others,num_iter,margin_others,bg_p,fg_p)
     return f.astype(np.float32)
     
 def estep_c(feature_map,label,suppress_others,num_iter,margin_others,bg_p,fg_p):
-    estep_lib.e_step(feature_map.ctypes.data_as(POINTER(c_float)),feature_map.ctypes.shape_as(c_int),feature_map.ctypes.strides_as(c_int),label.ctypes.data_as(POINTER(c_int)),suppress_others,num_iter,margin_others,bg_p,fg_p)
+    estep_lib.e_step(feature_map.ctypes.data_as(POINTER(c_float)),feature_map.ctypes.shape_as(c_int),feature_map.ctypes.strides_as(c_int),label.ctypes.data_as(POINTER(c_int)),label.ctypes.shape_as(c_int),suppress_others,num_iter,margin_others,bg_p,fg_p)
     return feature_map
 
 def estep_py(feature_map,label,suppress_others,num_iter,margin_others,bg_p,fg_p):
@@ -85,19 +82,21 @@ def estep_py(feature_map,label,suppress_others,num_iter,margin_others,bg_p,fg_p)
 
 
 if __name__ == "__main__":
+    with open("tmp.pickle","rb") as f:
+        a = pickle.load(f)
+    f = a["f"]
+    l = a["l"]
     #f = np.random.randn(10,100,100,10)
     #l = np.array([[1,1,0,0,1,0,0,0,1,1],[1,0,1,0,0,0,1,1,1,1],[1,1,0,0,1,0,0,0,1,1],[1,0,1,0,0,0,1,1,1,1],[1,1,0,0,1,0,0,0,1,1],[1,0,1,0,0,0,1,1,1,1],[1,1,0,0,1,0,0,0,1,1],[1,0,1,0,0,0,1,1,1,1],[1,1,0,0,1,0,0,0,1,1],[1,0,1,0,0,0,1,1,1,1],[1,1,0,0,1,0,0,0,1,1],[1,0,1,0,0,0,1,1,1,1],[1,1,0,0,1,0,0,0,1,1],[1,0,1,0,0,0,1,1,1,1],[1,1,0,0,1,0,0,0,1,1],[1,0,1,0,0,0,1,1,1,1],[1,1,0,0,1,0,0,0,1,1],[1,0,1,0,0,0,1,1,1,1],[1,1,0,0,1,0,0,0,1,1],[1,0,1,0,0,0,1,1,1,1]][:10])
-    f = np.array([[[[1,2,3]],[[3,2,1]]],[[[4,5,6]],[[7,8,9]]]],dtype=np.float32) # shape: 2x2x1x3
-    l = np.array([[[1],[2]],[[1],[0]]]) # shape: 2x3
+    #f = np.array([[[[1,2,3]],[[3,2,1]]],[[[4,5,6]],[[7,8,9]]]],dtype=np.float32) # shape: 2x2x1x3
+    #l = np.array([[[1],[2]],[[1],[0]]]) # shape: 2x3
     #f = np.array([[[[1,2,3]],[[3,2,1]]]],dtype=np.float32) # shape: 2x2x1x3
     #l = np.array([[1,1,1]]) # shape: 2x3
     #print("before:%s" % str(f))
     #print("before:%s" % str(l))
     start_time = time.time()
     #print("start_time:%f" % start_time)
-    t = estep(f,l,use_c=True)
-    #t = estep(f,l)
-    #print("after:%s" % str(t))
+    #t = estep(f,l,use_c=True)
+    t = estep(f,l)
     end_time = time.time()
-    #print("end_time:%f" % end_time)
     print("duration time:%f" % (end_time-start_time))
