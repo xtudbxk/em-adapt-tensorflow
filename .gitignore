@@ -1,2 +1,6 @@
 *.pyc
 pythonlib/deeplearning/*
+model/*
+log/*
+saver/*
+pascal_voc

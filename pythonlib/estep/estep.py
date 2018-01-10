@@ -11,7 +11,7 @@ if os.path.exists(libweaklabel_path) is False:
     libweaklabel_path = os.path.join(os.getcwd(),"pythonlib","estep",libweaklabel_path)
     assert os.path.exists(libweaklabel_path),"error, cannot find libweaklabel.so"
 
-estep_lib = cdll.LoadLibrary("/home/xtudbxk/git/em-adapt/pythonlib/estep/libweaklabel.so")
+estep_lib = cdll.LoadLibrary(libweaklabel_path)
 estep_lib.e_step.argtypes=[POINTER(c_float),POINTER(c_int),POINTER(c_int),POINTER(c_int),c_bool,c_int,c_float,c_float,c_float]
 #estep_lib.e_step.argtypes=[POINTER(c_float),POINTER(c_int),POINTER(c_int)]
 
