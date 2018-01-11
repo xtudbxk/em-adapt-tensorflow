@@ -7,6 +7,7 @@ import numpy as np
 from network import Network
 from estep import estep as _estep
 from dataset import dataset_tf as dataset
+from metrics import metrics_update
 import time
 
 class ADAPT(Network):
@@ -173,6 +174,14 @@ class ADAPT(Network):
         loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.reshape(self.net[weaklabel_layer],[-1]),logits=tf.reshape(self.net["output"],[-1,self.category_num])))
         return loss
 
+    def optimize(self,base_lr,momentum):
+        self.net["lr"] = tf.Variable(base_lr, trainable=False)
+        opt = tf.train.MomentumOptimizer(self.net["lr"],momentum)
+        self.net["train_op"],self.a = metrics_update(self.loss["total"],opt,kinds=["gradient"])
+        #update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        #with tf.control_dependencies(update_ops):
+        #    self.net["train_op"] = opt.minimize(self.loss["total"])
+
     def train(self,base_lr,weight_decay,momentum,batch_size,epoches):
         assert self.data is not None,"data is None"
         assert self.sess is not None,"sess is None"
@@ -212,7 +221,11 @@ class ADAPT(Network):
 
                 data_x,data_y = self.sess.run([x,y],feed_dict={self.net["is_training"]:True})
                 params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_probe"]:0.5}
-                _ = self.sess.run(self.net["train_op"],feed_dict=params)
+                l,_,_ = self.sess.run([self.net["lr"],self.a,self.net["train_op"]],feed_dict=params)
+                print("lr: %f" % l)
+                print("x mean:%f, y mean: %f" % (np.mean(data_x),np.mean(data_y)))
+                print("x min:%f, y min: %f" % (np.amin(data_x),np.min(data_y)))
+
 
                 if i%100 in [0,1,2,3,4,5,6,7,8,9]:
                     self.sess.run(self.metrics["update"],feed_dict=params)
@@ -248,7 +261,7 @@ class ADAPT(Network):
             print("duration time:%f" %  (end_time-start_time))
 
 if __name__ == "__main__":
-    batch_size = 8
+    batch_size = 1
     input_size = (321,321)
     category_num = 21
     epoches = 10
