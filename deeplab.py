@@ -31,6 +31,8 @@ class ADAPT(Network):
         return self.net["output"]
 
     def create_network(self):
+        if "init_model_path" in self.config:
+            self.load_init_model()
         with tf.name_scope("vgg") as scope:
             # build block
             block = self.build_block("input",["conv1_1","relu1_1","conv1_2","relu1_2","pool1"])
@@ -104,16 +106,15 @@ class ADAPT(Network):
         scale_output = tf.image.resize_bilinear(self.net["output"],self.net["input"].shape[1:3])
         self.net["pred"] = tf.argmax(scale_output,axis=3)
 
-
     def e_step(self,last_layer, bg_p, fg_p, num_iter, suppress_others, margin_others):
         shrink_label = tf.squeeze(tf.image.resize_nearest_neighbor(self.net["label"],self.net["output"].shape[1:3]),axis=3)
         def estep(feature_map,label):
             s = time.time()
-            print("start time:%f" % s)
-            #tmp_ = _estep(feature_map,label,suppress_others,num_iter,margin_others,bg_p,fg_p,use_c=True)
-            tmp_ = _estep(feature_map,label,suppress_others,num_iter,margin_others,bg_p,fg_p)
+            #print("start time:%f" % s)
+            tmp_ = _estep(feature_map,label,suppress_others,num_iter,margin_others,bg_p,fg_p,use_c=True)
+            #tmp_ = _estep(feature_map,label,suppress_others,num_iter,margin_others,bg_p,fg_p)
             e = time.time()
-            print("duration time :%f " % (e-s))
+            #print("duration time :%f " % (e-s))
             return tmp_
         layer = "e_step"
         self.net[layer] = tf.py_func(estep,[self.net[last_layer],shrink_label],tf.float32)
@@ -121,6 +122,11 @@ class ADAPT(Network):
         layer = "e_argmax"
         self.net[layer] = tf.argmax(self.net[last_layer],axis=3)
         return layer
+
+    def load_init_model(self):
+        model_path = self.config["init_model_path"]
+        self.init_model = np.load(model_path,encoding="latin1").item()
+        print("load init model success: %s" % model_path)
 
     def get_weights_and_bias(self,layer):
         print("layer: %s" % layer)
@@ -139,11 +145,9 @@ class ADAPT(Network):
                 shape = [4,4,512,4096]
             if layer == "fc7":
                 shape = [1,1,4096,4096]
-                layer = "hidden_output"
             if layer == "fc8": 
                 shape = [1,1,4096,self.category_num]
-                layer = "output"
-        if "trained_model" not in self.config:
+        if "init_model_path" not in self.config:
             init = tf.random_normal_initializer(stddev=0.01)
             weights = tf.get_variable(name="%s_weights" % layer,initializer=init, shape = shape)
             init = tf.constant_initializer(0)
@@ -152,12 +156,12 @@ class ADAPT(Network):
             if layer == "fc8":
                 init = tf.random_normal_initializer(stddev=0.01)
             else:
-                init = tf.constant_initializer(self.trained_model[layer]["weights"])
+                init = tf.constant_initializer(self.init_model[layer]["w"])
             weights = tf.get_variable(name="%s_weights" % layer,initializer=init,shape = shape)
             if layer == "fc8":
                 init = tf.constant_initializer(0)
             else:
-                init = tf.constant_initializer(self.trained_model[layer]["biases"])
+                init = tf.constant_initializer(self.init_model[layer]["b"])
             bias = tf.get_variable(name="%s_bias" % layer,initializer=init,shape = [shape[-1]])
         self.weights[layer] = (weights,bias)
         self.lr_1_list.append(weights)
@@ -213,7 +217,7 @@ class ADAPT(Network):
                 if i%100 in [0,1,2,3,4,5,6,7,8,9]:
                     self.sess.run(self.metrics["update"],feed_dict=params)
                 if i%100 == 9:
-                    summarys,accu,miou,loss,lr = self.sess.run([self.summarys["train"]["ops"],self.metrics["accu"],self.metrics["miou"],self.loss["total"],self.net["lr"]],feed_dict=params)
+                    summarys,accu,miou,loss,lr = self.sess.run([self.summary["train"]["op"],self.metrics["accu"],self.metrics["miou"],self.loss["total"],self.net["lr"]],feed_dict=params)
                     self.summary["writer"].add_summary(summarys,i)
                     print("epoch:%f, iteration:%f, lr:%f, loss:%f, accu:%f, miou:%f" % (epoch,i,lr,loss,accu,miou))
                 if i%100 == 10:
@@ -226,26 +230,28 @@ class ADAPT(Network):
                 if i%1000 == 19:
                     data_x,data_y = self.sess.run([x,y],feed_dict={self.net["is_training"]:False})
                     params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_probe"]:0.5}
-                    summarys,accu,miou,loss,lr = self.sess.run([self.summarys["val"]["ops"],self.metrics["accu"],self.metrics["miou"],self.loss["total"],self.net["lr"]],feed_dict=params)
+                    summarys,accu,miou,loss,lr = self.sess.run([self.summary["val"]["op"],self.metrics["accu"],self.metrics["miou"],self.loss["total"],self.net["lr"]],feed_dict=params)
                     self.summary["writer"].add_summary(summarys,i)
                     print("val epoch:%f, iteration:%f, lr:%f, loss:%f, accu:%f, miou:%f" % (epoch,i,lr,loss,accu,miou))
                 if i%1000 == 20:
                     data_x,data_y = self.sess.run([x,y],feed_dict={self.net["is_training"]:False})
-                    params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_prob"]:0.5}
+                    params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_probe"]:0.5}
                     self.sess.run(self.metrics["reset"],feed_dict=params)
 
                 if i%3000 == 2999:
-                    self.saver["norm"].save(self.sess,os.path.join(self.config.get("saver_path"),"norm"),global_step=i)
+                    self.saver["norm"].save(self.sess,os.path.join(self.config.get("saver_path","saver"),"norm"),global_step=i)
+                i+=1
+                epoch = i / iterations_per_epoch_train
 
             end_time = time.time()
             print("end_time:%f" % end_time)
             print("duration time:%f" %  (end_time-start_time))
 
 if __name__ == "__main__":
-    batch_size = 1
+    batch_size = 8
     input_size = (321,321)
     category_num = 21
     epoches = 10
     data = dataset({"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num})
-    adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num})
+    adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"init_model_path":"./model/init.npy"})
     adapt.train(base_lr=0.01,weight_decay=0,momentum=0.9,batch_size=batch_size,epoches=epoches)
