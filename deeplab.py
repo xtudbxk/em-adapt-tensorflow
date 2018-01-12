@@ -177,10 +177,10 @@ class ADAPT(Network):
     def optimize(self,base_lr,momentum):
         self.net["lr"] = tf.Variable(base_lr, trainable=False)
         opt = tf.train.MomentumOptimizer(self.net["lr"],momentum)
-        self.net["train_op"],self.a = metrics_update(self.loss["total"],opt,kinds=["gradient"])
-        #update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-        #with tf.control_dependencies(update_ops):
-        #    self.net["train_op"] = opt.minimize(self.loss["total"])
+        #self.net["train_op"],self.a = metrics_update(self.loss["total"],opt,kinds=["gradient"])
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        with tf.control_dependencies(update_ops):
+            self.net["train_op"] = opt.minimize(self.loss["total"])
 
     def train(self,base_lr,weight_decay,momentum,batch_size,epoches):
         assert self.data is not None,"data is None"
@@ -214,17 +214,18 @@ class ADAPT(Network):
             iterations_per_epoch_train = self.data.get_data_len() // batch_size
             while epoch < epoches:
                 if i == 40*iterations_per_epoch_train:
-                    new_lr = 0.003
+                    new_lr = 0.0003
                     print("save model before new_lr:%f" % new_lr)
                     self.saver["lr"].save(self.sess,os.path.join(self.config.get("saver_path","saver"),"lr-%f" % base_lr),global_step=i)
                     self.sess.run(tf.assign(self.net["lr"],new_lr))
 
                 data_x,data_y = self.sess.run([x,y],feed_dict={self.net["is_training"]:True})
                 params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_probe"]:0.5}
-                l,_,_ = self.sess.run([self.net["lr"],self.a,self.net["train_op"]],feed_dict=params)
-                print("lr: %f" % l)
-                print("x mean:%f, y mean: %f" % (np.mean(data_x),np.mean(data_y)))
-                print("x min:%f, y min: %f" % (np.amin(data_x),np.min(data_y)))
+                #l,_,_ = self.sess.run([self.net["lr"],self.a,self.net["train_op"]],feed_dict=params)
+                #print("lr: %f" % l)
+                #print("x mean:%f, y mean: %f" % (np.mean(data_x),np.mean(data_y)))
+                #print("x min:%f, y min: %f" % (np.amin(data_x),np.min(data_y)))
+                _ = self.sess.run(self.net["train_op"],feed_dict=params)
 
 
                 if i%100 in [0,1,2,3,4,5,6,7,8,9]:
@@ -261,10 +262,10 @@ class ADAPT(Network):
             print("duration time:%f" %  (end_time-start_time))
 
 if __name__ == "__main__":
-    batch_size = 1
+    batch_size = 8
     input_size = (321,321)
     category_num = 21
     epoches = 10
     data = dataset({"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num})
     adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"init_model_path":"./model/init.npy"})
-    adapt.train(base_lr=0.01,weight_decay=0,momentum=0.9,batch_size=batch_size,epoches=epoches)
+    adapt.train(base_lr=0.001,weight_decay=0,momentum=0.7,batch_size=batch_size,epoches=epoches)
