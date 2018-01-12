@@ -19,6 +19,8 @@ class ADAPT(Network):
         # different lr for different variable
         self.lr_1_list = []
         self.lr_2_list = []
+        self.lr_10_list = []
+        self.lr_20_list = []
 
     def build(self):
         if "output" not in self.net:
@@ -165,8 +167,13 @@ class ADAPT(Network):
                 init = tf.constant_initializer(self.init_model[layer]["b"])
             bias = tf.get_variable(name="%s_bias" % layer,initializer=init,shape = [shape[-1]])
         self.weights[layer] = (weights,bias)
-        self.lr_1_list.append(weights)
-        self.lr_2_list.append(bias)
+        if layer != "fc8":
+            self.lr_1_list.append(weights)
+            self.lr_2_list.append(bias)
+        else:
+            self.lr_10_list.append(weights)
+            self.lr_20_list.append(bias)
+
         return weights,bias
 
     def getloss(self):
@@ -177,10 +184,23 @@ class ADAPT(Network):
     def optimize(self,base_lr,momentum):
         self.net["lr"] = tf.Variable(base_lr, trainable=False)
         opt = tf.train.MomentumOptimizer(self.net["lr"],momentum)
-        #self.net["train_op"],self.a = metrics_update(self.loss["total"],opt,kinds=["gradient"])
-        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-        with tf.control_dependencies(update_ops):
-            self.net["train_op"] = opt.minimize(self.loss["total"])
+        gradients = opt.compute_gradients(self.loss["total"])
+        gradients = [(g,v) for (g,v) in gradients if g is not None]
+        a = tf.Variable(1.0,dtype=tf.float32)
+        for (g,v) in gradients:
+            if v in self.lr_2_list:
+                g = 2*g
+            if v in self.lr_10_list:
+                g = 10*g
+            if v in self.lr_20_list:
+                g = 20*g
+                print("20 x gradient")
+            
+            a = tf.Print(a,[g.name,tf.reduce_mean(g)],"gradient")
+            a = tf.Print(a,[v.name,tf.reduce_mean(v)],"weight")
+            a = tf.Print(a,[v.name,tf.reduce_mean(g)/(tf.reduce_mean(v)+1e-20)],"rate")
+        self.net["train_op"] = opt.apply_gradients(gradients)
+        self.net["g"] = a
 
     def train(self,base_lr,weight_decay,momentum,batch_size,epoches):
         assert self.data is not None,"data is None"
@@ -213,7 +233,7 @@ class ADAPT(Network):
             epoch,i = 0.0,0
             iterations_per_epoch_train = self.data.get_data_len() // batch_size
             while epoch < epoches:
-                if i == 40*iterations_per_epoch_train:
+                if i == 5*iterations_per_epoch_train:
                     new_lr = 0.0003
                     print("save model before new_lr:%f" % new_lr)
                     self.saver["lr"].save(self.sess,os.path.join(self.config.get("saver_path","saver"),"lr-%f" % base_lr),global_step=i)
@@ -225,29 +245,30 @@ class ADAPT(Network):
                 #print("lr: %f" % l)
                 #print("x mean:%f, y mean: %f" % (np.mean(data_x),np.mean(data_y)))
                 #print("x min:%f, y min: %f" % (np.amin(data_x),np.min(data_y)))
-                _ = self.sess.run(self.net["train_op"],feed_dict=params)
-
-
-                if i%100 in [0,1,2,3,4,5,6,7,8,9]:
-                    self.sess.run(self.metrics["update"],feed_dict=params)
-                if i%100 == 9:
-                    summarys,accu,miou,loss,lr = self.sess.run([self.summary["train"]["op"],self.metrics["accu"],self.metrics["miou"],self.loss["total"],self.net["lr"]],feed_dict=params)
+                if i%1000 == 0:
+                    _ = self.sess.run([self.net["g"],self.net["train_op"]],feed_dict=params)
+                elif i%100 in [1,2,3,4,5,6,7,8,9]:
+                    self.sess.run([self.net["train_op"],self.metrics["update"]],feed_dict=params)
+                elif i%100 == 10:
+                    summarys,accu,miou,loss,lr = self.sess.run([self.net["train_op"],self.summary["train"]["op"],self.metrics["accu"],self.metrics["miou"],self.loss["total"],self.net["lr"]],feed_dict=params)
                     self.summary["writer"].add_summary(summarys,i)
                     print("epoch:%f, iteration:%f, lr:%f, loss:%f, accu:%f, miou:%f" % (epoch,i,lr,loss,accu,miou))
-                if i%100 == 10:
-                    self.sess.run(self.metrics["reset"],feed_dict=params)
+                elif i%100 == 11:
+                    self.sess.run([self.net["train_op"],self.metrics["reset"]],feed_dict=params)
+                else:
+                    _ = self.sess.run(self.net["train_op"],feed_dict=params)
 
-                if i%1000 in [10,11,12,13,14,15,16,17,18,19]:
+                if i%2000 in [10,11,12,13,14,15,16,17,18,19]:
                     data_x,data_y = self.sess.run([x,y],feed_dict={self.net["is_training"]:False})
                     params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_probe"]:0.5}
                     self.sess.run(self.metrics["update"],feed_dict=params)
-                if i%1000 == 19:
+                if i%2000 == 19:
                     data_x,data_y = self.sess.run([x,y],feed_dict={self.net["is_training"]:False})
                     params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_probe"]:0.5}
                     summarys,accu,miou,loss,lr = self.sess.run([self.summary["val"]["op"],self.metrics["accu"],self.metrics["miou"],self.loss["total"],self.net["lr"]],feed_dict=params)
                     self.summary["writer"].add_summary(summarys,i)
                     print("val epoch:%f, iteration:%f, lr:%f, loss:%f, accu:%f, miou:%f" % (epoch,i,lr,loss,accu,miou))
-                if i%1000 == 20:
+                if i%2000 == 20:
                     data_x,data_y = self.sess.run([x,y],feed_dict={self.net["is_training"]:False})
                     params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_probe"]:0.5}
                     self.sess.run(self.metrics["reset"],feed_dict=params)
@@ -268,4 +289,4 @@ if __name__ == "__main__":
     epoches = 10
     data = dataset({"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num})
     adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"init_model_path":"./model/init.npy"})
-    adapt.train(base_lr=0.001,weight_decay=0,momentum=0.7,batch_size=batch_size,epoches=epoches)
+    adapt.train(base_lr=0.001,weight_decay=5e-4,momentum=0.7,batch_size=batch_size,epoches=epoches)
