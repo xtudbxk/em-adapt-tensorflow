@@ -250,7 +250,7 @@ class ADAPT(Network):
                 elif i%100 in [1,2,3,4,5,6,7,8,9]:
                     self.sess.run([self.net["train_op"],self.metrics["update"]],feed_dict=params)
                 elif i%100 == 10:
-                    summarys,accu,miou,loss,lr = self.sess.run([self.net["train_op"],self.summary["train"]["op"],self.metrics["accu"],self.metrics["miou"],self.loss["total"],self.net["lr"]],feed_dict=params)
+                    _,summarys,accu,miou,loss,lr = self.sess.run([self.net["train_op"],self.summary["train"]["op"],self.metrics["accu"],self.metrics["miou"],self.loss["total"],self.net["lr"]],feed_dict=params)
                     self.summary["writer"].add_summary(summarys,i)
                     print("epoch:%f, iteration:%f, lr:%f, loss:%f, accu:%f, miou:%f" % (epoch,i,lr,loss,accu,miou))
                 elif i%100 == 11:
