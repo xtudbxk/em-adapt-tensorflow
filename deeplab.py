@@ -228,13 +228,18 @@ class ADAPT(Network):
 
             start_time = time.time()
             print("start_time: %f" % start_time)
-            print("config -- lr:%f weight_decay:%f momentum:%f batch_size:%f epoches:%f" % (base_lr,weight_decay,momentum,base_lr,epoches))
+            print("config -- lr:%f weight_decay:%f momentum:%f batch_size:%f epoches:%f" % (base_lr,weight_decay,momentum,batch_size,epoches))
 
             epoch,i = 0.0,0
             iterations_per_epoch_train = self.data.get_data_len() // batch_size
             while epoch < epoches:
-                if i == 5*iterations_per_epoch_train:
+                if i == 20*iterations_per_epoch_train:
                     new_lr = 0.0003
+                    print("save model before new_lr:%f" % new_lr)
+                    self.saver["lr"].save(self.sess,os.path.join(self.config.get("saver_path","saver"),"lr-%f" % base_lr),global_step=i)
+                    self.sess.run(tf.assign(self.net["lr"],new_lr))
+                if i == 40*iterations_per_epoch_train:
+                    new_lr = 0.0001
                     print("save model before new_lr:%f" % new_lr)
                     self.saver["lr"].save(self.sess,os.path.join(self.config.get("saver_path","saver"),"lr-%f" % base_lr),global_step=i)
                     self.sess.run(tf.assign(self.net["lr"],new_lr))
@@ -286,7 +291,7 @@ if __name__ == "__main__":
     batch_size = 8
     input_size = (321,321)
     category_num = 21
-    epoches = 10
+    epoches = 50
     data = dataset({"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num})
     adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"init_model_path":"./model/init.npy"})
-    adapt.train(base_lr=0.001,weight_decay=5e-4,momentum=0.7,batch_size=batch_size,epoches=epoches)
+    adapt.train(base_lr=0.001,weight_decay=1e-4,momentum=0.7,batch_size=batch_size,epoches=epoches)
