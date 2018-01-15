@@ -93,6 +93,7 @@ class ADAPT(Network):
 
                     else:
                         self.net[layer] = tf.nn.conv2d( self.net[last_layer], weights, strides = [1,1,1,1], padding="SAME", name="conv")
+                    self.net[layer] = tf.nn.bias_add( self.net[layer], bias, name="bias")
                     last_layer = layer
             if layer.startswith("relu"):
                 with tf.name_scope(layer) as scope:
@@ -293,7 +294,7 @@ if __name__ == "__main__":
     batch_size = 6
     input_size = (321,321)
     category_num = 21
-    epoches = 50
+    epoches = 20
     data = dataset({"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num})
     adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"init_model_path":"./model/init.npy"})
-    adapt.train(base_lr=0.001,weight_decay=1e-4,momentum=0.7,batch_size=batch_size,epoches=epoches)
+    adapt.train(base_lr=0.001,weight_decay=5e-4,momentum=0.7,batch_size=batch_size,epoches=epoches)
