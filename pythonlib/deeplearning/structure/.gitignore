@@ -1,0 +1,3 @@
+trained_model/*.npy
+log/*
+__pycache__/*

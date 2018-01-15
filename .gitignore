@@ -1,5 +1,4 @@
 *.pyc
-pythonlib/deeplearning/*
 model/*
 log/*
 saver/*
