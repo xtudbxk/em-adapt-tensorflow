@@ -157,12 +157,14 @@ class ADAPT(Network):
             bias = tf.get_variable(name="%s_bias" % layer,initializer=init, shape = [shape[-1]])
         else:
             if layer == "fc8":
-                init = tf.random_normal_initializer(stddev=0.01)
+                #init = tf.random_normal_initializer(stddev=0.01)
+                init = tf.contrib.layers.xavier_initializer(uniform=True)
             else:
                 init = tf.constant_initializer(self.init_model[layer]["w"])
             weights = tf.get_variable(name="%s_weights" % layer,initializer=init,shape = shape)
             if layer == "fc8":
-                init = tf.constant_initializer(0)
+                #init = tf.constant_initializer(0)
+                init = tf.contrib.layers.xavier_initializer(uniform=True)
             else:
                 init = tf.constant_initializer(self.init_model[layer]["b"])
             bias = tf.get_variable(name="%s_bias" % layer,initializer=init,shape = [shape[-1]])
@@ -288,7 +290,7 @@ class ADAPT(Network):
             print("duration time:%f" %  (end_time-start_time))
 
 if __name__ == "__main__":
-    batch_size = 8
+    batch_size = 6
     input_size = (321,321)
     category_num = 21
     epoches = 50
