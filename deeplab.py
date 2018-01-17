@@ -186,17 +186,18 @@ class ADAPT(Network):
 
     def optimize(self,base_lr,momentum):
         self.net["lr"] = tf.Variable(base_lr, trainable=False)
-        opt = tf.train.MomentumOptimizer(self.net["lr"],momentum)
+        #opt = tf.train.MomentumOptimizer(self.net["lr"],momentum)
+        opt = tf.train.AdamOptimizer(self.net["lr"])
         gradients = opt.compute_gradients(self.loss["total"])
         gradients = [(g,v) for (g,v) in gradients if g is not None]
         a = tf.Variable(1.0,dtype=tf.float32)
         for (g,v) in gradients:
             if v in self.lr_2_list:
-                g = 2*g
+                g = 30*g
             if v in self.lr_10_list:
-                g = 10*g
+                g = 100*g
             if v in self.lr_20_list:
-                g = 20*g
+                g = 200*g
                 print("20 x gradient")
             
             a = tf.Print(a,[g.name,tf.reduce_mean(g)],"gradient")
@@ -236,16 +237,12 @@ class ADAPT(Network):
             epoch,i = 0.0,0
             iterations_per_epoch_train = self.data.get_data_len() // batch_size
             while epoch < epoches:
-                if i == 20*iterations_per_epoch_train:
-                    new_lr = 0.0003
-                    print("save model before new_lr:%f" % new_lr)
-                    self.saver["lr"].save(self.sess,os.path.join(self.config.get("saver_path","saver"),"lr-%f" % base_lr),global_step=i)
-                    self.sess.run(tf.assign(self.net["lr"],new_lr))
-                if i == 40*iterations_per_epoch_train:
-                    new_lr = 0.0001
-                    print("save model before new_lr:%f" % new_lr)
-                    self.saver["lr"].save(self.sess,os.path.join(self.config.get("saver_path","saver"),"lr-%f" % base_lr),global_step=i)
-                    self.sess.run(tf.assign(self.net["lr"],new_lr))
+                #if i == 5*iterations_per_epoch_train:
+                #    new_lr = 0.0003
+                #    print("save model before new_lr:%f" % new_lr)
+                #    self.saver["lr"].save(self.sess,os.path.join(self.config.get("saver_path","saver"),"lr-%f" % base_lr),global_step=i)
+                #    self.sess.run(tf.assign(self.net["lr"],new_lr))
+                #    base_lr = new_lr
 
                 data_x,data_y = self.sess.run([x,y],feed_dict={self.net["is_training"]:True})
                 params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_probe"]:0.5}
@@ -297,4 +294,5 @@ if __name__ == "__main__":
     epoches = 20
     data = dataset({"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num})
     adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"init_model_path":"./model/init.npy"})
-    adapt.train(base_lr=0.001,weight_decay=5e-4,momentum=0.7,batch_size=batch_size,epoches=epoches)
+    #adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"model_path":"old_saver/20180110-6-0/norm-32999"})
+    adapt.train(base_lr=0.001,weight_decay=1e-4,momentum=0.7,batch_size=batch_size,epoches=epoches)

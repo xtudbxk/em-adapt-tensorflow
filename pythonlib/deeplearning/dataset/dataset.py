@@ -138,6 +138,7 @@ class dataset_np(dataset):
         r,g,b = np.dsplit(x,3)
         x = np.concatenate((b,g,r),axis=2)
         x = self.subtract_mean(x)
+        # todo : random flip and random rotate
 
         return x,y
 
@@ -176,7 +177,7 @@ class dataset_tf(dataset):
             label = tf.image.decode_image(label_raw)
             label = tf.expand_dims(label,axis=0)
             if category == "train":
-                img,label = self.image_preprocess(img,label,random_scale=True)
+                img,label = self.image_preprocess(img,label,random_scale=True,flip=True)
             else:
                 img,label = self.image_preprocess(img,label,random_scale=False)
 
@@ -251,25 +252,17 @@ class dataset_tf(dataset):
 
         return img, label
 
-    def image_flip(self,img,label,left_right=True, up_down=False, random_s=1):
+    def image_flip(self,img,label,left_right=True, up_down=False, random_s=0.5):
         if left_right is True:
             r = tf.random_uniform([1])
             r = tf.reduce_sum(r)
-            def flip_left_right():
-                nonlocal img,label
-                img = tf.image.flip_left_right(img)
-                label = tf.image.flip_left_right(label)
-                return 1
-            tf.cond(r < random_s, flip_left_right,lambda:0)
+            img = tf.cond(r < random_s, lambda:tf.image.flip_left_right(img),lambda:img)
+            label = tf.cond(r < random_s, lambda:tf.image.flip_left_right(label),lambda:label)
         if up_down is True:
             r = tf.random_uniform([1])
             r = tf.reduce_sum(r)
-            def flip_up_down():
-                nonlocal img,label
-                img = tf.image.flip_up_down(img)
-                label = tf.image.flip_up_down(label)
-                return 1
-            tf.cond(r < random_s, flip_up_down,lambda:0)
+            img = tf.cond(r < random_s, lambda:tf.image.flip_left_right(img),lambda:img)
+            label = tf.cond(r < random_s, lambda:tf.image.flip_left_right(label),lambda:label)
 
         return img, label
 

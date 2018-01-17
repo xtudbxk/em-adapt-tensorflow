@@ -41,5 +41,5 @@ def find_gpu(commandline,gpus=[0,1,2,3,4,5],only_cup=False):
         time.sleep(20)
 
 if __name__ == "__main__":
-    cmd = "python deeplab.py %d 2>&1|tee result/20180110-6-0"
+    cmd = "python deeplab.py %d 2>&1|tee result/20180110-7-0"
     find_gpu(cmd,gpus=[0,1,2,3,4,5],only_cup=False)
