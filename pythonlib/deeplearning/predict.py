@@ -4,8 +4,9 @@ import time
 import math
 import numpy as np
 import tensorflow as tf
+from scipy import ndimage
 import skimage.io as imgio
-from dataset import dataset
+from dataset import dataset_np as dataset
 from metrics import metrics_np
 import skimage.transform as imgtf
 import pydensecrf.densecrf as dcrf
@@ -26,18 +27,18 @@ class Predict():
         sess = self.sess
         saver = tf.train.import_meta_graph("%s.meta" % saver_filename)
         self.net["input"] = tf.get_collection("input")[0]
-        self.net["dropout_probe"] = tf.get_collection("dropout_probe")[0]
+        self.net["drop_probe"] = tf.get_collection("drop_probe")[0]
         self.net["is_training"] = tf.get_collection("is_training")[0]
         self.net["output"] = tf.get_collection("output")[0]
         self.net["label"] = tf.placeholder(tf.uint8,[None,self.h,self.w])
-        pred = tf.argmax(self.net["output"],axis=3)
-        self.mIoU, self.update_op = tf.metrics.mean_iou(self.net["label"],pred,num_classes=self.categorys_num)
+        self.net["pred"] = tf.get_collection("pred")[0]
+        self.mIoU, self.update_op = tf.metrics.mean_iou(self.net["label"],self.net["pred"],num_classes=self.categorys_num)
         sess.run(tf.global_variables_initializer())
         sess.run(tf.local_variables_initializer())
         saver.restore(sess,saver_filename)
 
     def predict_(self,input,single_batch=True,**kwargs):
-        params = {self.net["input"]:input,self.net["is_training"]:False,self.net["dropout_probe"]:1.0}
+        params = {self.net["input"]:input,self.net["is_training"]:False,self.net["drop_probe"]:1.0}
         for key in kwargs:
             params[self.net[key]] = kwargs[key]
         if is_pred is True:
@@ -116,7 +117,7 @@ class Predict():
                 print("start %d ..." % i)
             x,y = self.data.next_batch(batch_size=1,category=category)
             #print("x shape:%s y shape:%s" % (str(x.shape),str(y.shape)))
-            feed_dict = {self.net["input"]:x,self.net["label"]:y,self.net["keep_prob"]:1.0}
+            feed_dict = {self.net["input"]:x,self.net["label"]:y,self.net["drop_probe"]:1.0}
             i+=1
             if save_pred is True:
                 y_ = np.argmax(y_,axis=3)
@@ -141,21 +142,28 @@ class Predict():
             if i % 10 == 0:
                 print("start %d ... " % i)
             x,y = self.data.next_batch(category=category,batch_size=1)
-            #y_ = self.predict_multi_scale_batch(x,scales=scales)
-            y_ = self.predict(x,single_batch=False)
             if self.crf_config is not None:
-                y_ = self.crf_inference(y_,x)
+                y_origin = self.predict_multi_scale_batch(x,scales=scales,argmax=False)
+                y_origin = y_origin.astype(np.float32)
+                x = np.reshape(x,(self.h,self.w,3)).astype(np.uint8)
+                y_ = self.crf_inference(y_origin,x)
+            else:
+                y_ = self.predict_multi_scale_batch(x,scales=scales)
             all_labels.append(y)
             all_preds.append(y_)
             i += 1
             if save_pred is True:
-                imgio.imsave(os.path.join("pascal_voc","preds","%d_origin.png" % i),(np.reshape(x,(self.h,self.w,3))+self.data.img_mean)/255.0) # the x is float of [0,255]
-                imgio.imsave(os.path.join("pascal_voc","preds","%d_gt.png" % i),np.reshape(y,(self.h,self.w))*label_rate) # the y is ubyte of [0,255]
-                imgio.imsave(os.path.join("pascal_voc","preds","%d_pred.png" % i),np.reshape(y_,(self.h,self.w))*label_rate) # the y is ubyte of [0,255]
+                imgio.imsave(os.path.join("pascal_voc","preds","%d_origin.png" % i),(np.reshape(x,(self.input_size[0],self.input_size[1],3)))/255.0) # the x is float of [0,255]
+                imgio.imsave(os.path.join("pascal_voc","preds","%d_gt.png" % i),np.reshape(y,(self.input_size[0],self.input_size[1]))*label_rate) # the y is ubyte of [0,255]
+                imgio.imsave(os.path.join("pascal_voc","preds","%d_pred.png" % i),np.reshape(y_,(self.input_size[0],self.input_size[1]))*label_rate) # the y is ubyte of [0,255]
+                np.save(os.path.join("pascal_voc","preds","%d_before_crf.npy" % i),y_origin)
+                y_origin = np.argmax(y_origin,axis=3)
+                imgio.imsave(os.path.join("pascal_voc","preds","%d_no_crf_pred.png" % i),np.reshape(y_origin,(self.input_size[0],self.input_size[1]))*label_rate) # the y is ubyte of [0,255]
 
         ret_metrics = metrics_np(all_labels,all_preds,self.categorys_num)
         end_time = time.time()
         print("total time:%f" % (end_time - start_time))
+        print("metrics:%s" % str(ret_metrics))
         return ret_metrics
 
     def crf_inference(self,feat,img):
@@ -205,9 +213,9 @@ def test_crf(): # you need to comment the self.load_saver in __init__
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = sys.argv[1]
     #test_crf()
-    #input_size = (240,240)
-    input_size = (473,473)
+    input_size = (321,321)
     data = dataset({"input_size":input_size})
-    p = Predict(config = {"input_size":input_size,"saver_path":sys.argv[2],"data":data})
-    #p.miou_predict_tf()
-    p.test()
+    crf_config = {"bi_sxy":121,"bi_srgb":5,"bi_compat":10,"g_sxy":3,"g_compat":3,"iterations":5}
+    p = Predict(config = {"input_size":input_size,"saver_path":sys.argv[2],"data":data,"crf":crf_config})
+    #p.miou_predict_tf(save_pred=False)
+    p.metrics_predict(save_pred=True)

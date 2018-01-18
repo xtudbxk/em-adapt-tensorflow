@@ -193,12 +193,11 @@ class ADAPT(Network):
         a = tf.Variable(1.0,dtype=tf.float32)
         for (g,v) in gradients:
             if v in self.lr_2_list:
-                g = 30*g
+                g = 2*g
             if v in self.lr_10_list:
                 g = 100*g
             if v in self.lr_20_list:
                 g = 200*g
-                print("20 x gradient")
             
             a = tf.Print(a,[g.name,tf.reduce_mean(g)],"gradient")
             a = tf.Print(a,[v.name,tf.reduce_mean(v)],"weight")
@@ -295,4 +294,4 @@ if __name__ == "__main__":
     data = dataset({"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num})
     adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"init_model_path":"./model/init.npy"})
     #adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"model_path":"old_saver/20180110-6-0/norm-32999"})
-    adapt.train(base_lr=0.001,weight_decay=1e-4,momentum=0.7,batch_size=batch_size,epoches=epoches)
+    adapt.train(base_lr=0.1,weight_decay=1e-5,momentum=0.9,batch_size=batch_size,epoches=epoches)
