@@ -106,10 +106,6 @@ class ADAPT(Network):
 
         return last_layer
 
-    def pred(self):
-        scale_output = tf.image.resize_bilinear(self.net["output"],self.net["input"].shape[1:3])
-        self.net["pred"] = tf.argmax(scale_output,axis=3)
-
     def e_step(self,last_layer, bg_p, fg_p, num_iter, suppress_others, margin_others):
         shrink_label = tf.squeeze(tf.image.resize_nearest_neighbor(self.net["label"],self.net["output"].shape[1:3]),axis=3)
         def estep(feature_map,label):

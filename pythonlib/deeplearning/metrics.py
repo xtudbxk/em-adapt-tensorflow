@@ -33,7 +33,7 @@ def metrics_tf(gt,pred,num,shape,kinds=["miou"]):
 
     update_ops = []
     reset_ops = []
-    for i in range(num):
+    for i in range(num): # ignore void label
         tmp = np.full(shape,i)
         t_i = tf.equal(gt,tmp)
         n_j_i = tf.equal(pred,tmp)
@@ -112,7 +112,7 @@ def metrics_update(loss,optimizer,kinds=["gradient","weight","rate"],first_n=-1,
 # Originally written by wkentaro for the numpy version
 # https://github.com/wkentaro/pytorch-fcn/blob/master/torchfcn/utils.py
 def _fast_hist(label_true,label_pred,n_class):
-    mask = (label_true>=0) & (label_true<n_class)
+    mask = (label_true>=0) & (label_true<n_class) # to ignore void label
     hist = np.bincount( n_class * label_true[mask].astype(int)+label_pred[mask],minlength=n_class**2).reshape(n_class,n_class)
     return hist
 

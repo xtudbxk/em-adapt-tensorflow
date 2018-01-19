@@ -1,5 +1,6 @@
 import tensorflow as tf
 from metrics import metrics_tf
+from dataset import dataset_tf as dataset
 import numpy as np
 import time
 
@@ -35,19 +36,26 @@ class Network():
         return layer
 
     # need to rewrite
+    def pred(self):
+        self.net["rescale_output"] = tf.image.resize_bilinear(self.net["output"],(self.h,self.w))
+        self.net["pred"] = tf.argmax(self.net["rescale_output"],axis=3)
+
+    # need to rewrite
     def load_init_model(self):
         pass
 
-
     # need to rewrite
     def get_weights_and_biases(self,layer):
+        if layer in self.weights:
+            return self.weights[layer]
         w,b = None,None
         self.weights[layer] = (w,b)
         return w,b
     
     # need to rewrite
     def getloss(self):
-        loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.reshape(self.net["label"],[-1]),logits=tf.reshape(self.net["output"],[-1,self.category_num])))
+        label,output = self.remove_ignore_label(self.net["label"],self.net["output"])
+        loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=label,logits=output))
         return loss
 
     # need to rewrite
@@ -58,10 +66,6 @@ class Network():
         with tf.control_dependencies(update_ops):
             self.net["train_op"] = opt.minimize(self.loss["total"])
 
-    # need to rewrite
-    def pred(self):
-        # todo: maybe need to scale
-        self.net["pred"] = tf.argmax(self.net["output"],axis=3)
 
     # need to rewrite
     def getmetrics(self,batch_size=10):
@@ -73,8 +77,9 @@ class Network():
         assert self.data is not None,"data is None"
         assert self.sess is not None,"sess is None"
         self.net["is_training"] = tf.placeholder(tf.bool)
-        x_train,y_train,iterator_train = self.data.next_data(category="train",batch_size=batch_size,epoches=-1)
-        x_val,y_val,iterator_val = self.data.next_data(category="val",batch_size=batch_size,epoches=-1)
+
+        x_train,y_train,id_train,iterator_train = self.data.next_batch(category="train",batch_size=batch_size,epoches=-1)
+        x_val,y_val,id_val,iterator_val = self.data.next_batch(category="val",batch_size=batch_size,epoches=-1)
         x = tf.cond(self.net["is_training"],lambda:x_train,lambda:x_val)
         y = tf.cond(self.net["is_training"],lambda:y_train,lambda:y_val)
         self.build()
@@ -157,6 +162,20 @@ class Network():
             pred_rgb = tf.concat([pred_single,pred_single,pred_single],axis=3)
             self.images["image"] = tf.concat([tf.cast(self.net["input"]+self.data.img_mean,tf.uint8),tf.cast(gt_rgb,tf.uint8),tf.cast(pred_rgb,tf.uint8)],axis=2)
             return ["image"]
+
+    def remove_ignore_label(self,gt,output): 
+        ''' 
+        gt: not one-hot 
+        output: a distriution of all labels, and is scaled to macth the size of gt
+        NOTE the result is a flatted tensor
+        and all label which is bigger that or equal to self.category_num is void label
+        '''
+        gt = tf.reshape(gt,shape=[-1])
+        output = tf.reshape(output, shape=[-1,self.category_num])
+        indices = tf.squeeze(tf.where(tf.less(gt,self.category_num)),axis=1)
+        gt = tf.gather(gt,indices)
+        output = tf.gather(output,indices)
+        return gt,output
 
     def pre_train(self,base_lr,weight_decay,momentum,batch_size,save_layers=["input","output","label","pred"]):
         assert self.sess is not None,"sess is None"
