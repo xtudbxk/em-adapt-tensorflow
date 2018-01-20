@@ -9,10 +9,12 @@ class Network():
         self.config = config
         self.h,self.w = self.config.get("input_size",(25,25))
         self.category_num = self.config.get("category_num",21)
+        self.accum_num = self.config.get("accum_num",1)
         self.data = self.config.get("data",None)
         self.sess = self.config.get("sess",tf.Session())
         self.net = {}
         self.weights = {}
+        self.trainable_list = []
         self.loss = {}
         self.images = {}
         self.metrics = {}
@@ -50,6 +52,8 @@ class Network():
             return self.weights[layer]
         w,b = None,None
         self.weights[layer] = (w,b)
+        self.trainable_list.append(w)
+        self.trainable_list.append(b)
         return w,b
     
     # need to rewrite
@@ -62,9 +66,12 @@ class Network():
     def optimize(self,base_lr,momentum):
         self.net["lr"] = tf.Variable(base_lr, trainable=False)
         opt = tf.train.MomentumOptimizer(self.net["lr"],momentum)
-        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-        with tf.control_dependencies(update_ops):
-            self.net["train_op"] = opt.minimize(self.loss["total"])
+        gradients = opt.compute_gradients(self.loss["total"],var_list=self.trainable_list)
+        self.net["accum_gradient_accum"] = tf.group([self.net["accum_gradient"][i].assign_add( g/self.accum_num ) for (i,g) in enumerate(gradients)])
+        self.net["accum_gradient_clean"] = tf.group([g.assign(tf.zeros_like(g)) for g,v in self.net["accum_gradient"]])
+        self.net["accum_gradient_update"]  = opt.apply_gradients(self.net["accum_gradient"])
+
+        self.net["train_op"] = opt.apply_gradients(gradients)
 
 
     # need to rewrite
@@ -179,6 +186,7 @@ class Network():
 
     def pre_train(self,base_lr,weight_decay,momentum,batch_size,save_layers=["input","output","label","pred"]):
         assert self.sess is not None,"sess is None"
+        self.net["accum_gradient"] = [tf.Variable(tf.zeros_like(v),trainable=False) for v in self.trainable_list]
         summarys = {}
         with self.sess.as_default():
             loss_summarys = self.loss_summary(weight_decay)
