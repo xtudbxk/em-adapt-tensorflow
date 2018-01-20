@@ -109,11 +109,11 @@ class ADAPT(Network):
     def e_step(self,last_layer, bg_p, fg_p, num_iter, suppress_others, margin_others):
         shrink_label = tf.squeeze(tf.image.resize_nearest_neighbor(self.net["label"],self.net["output"].shape[1:3]),axis=3)
         def estep(feature_map,label):
-            s = time.time()
+            #s = time.time()
             #print("start time:%f" % s)
-            tmp_ = _estep(feature_map,label,suppress_others,num_iter,margin_others,bg_p,fg_p,use_c=True)
+            tmp_ = _estep(feature_map,label,suppress_others,num_iter,margin_others,bg_p,fg_p,use_c=False)
             #tmp_ = _estep(feature_map,label,suppress_others,num_iter,margin_others,bg_p,fg_p)
-            e = time.time()
+            #e = time.time()
             #print("duration time :%f " % (e-s))
             return tmp_
         layer = "e_step"
@@ -191,12 +191,14 @@ class ADAPT(Network):
             if v in self.lr_2_list:
                 g = 2*g
             if v in self.lr_10_list:
-                g = 100*g
+                g = 10*g
             if v in self.lr_20_list:
-                g = 200*g
+                g = 20*g
             
             a = tf.Print(a,[g.name,tf.reduce_mean(g)],"gradient")
             a = tf.Print(a,[v.name,tf.reduce_mean(v)],"weight")
+            a = tf.Print(a,[v.name,tf.reduce_max(v)],"weightmax")
+            a = tf.Print(a,[v.name,tf.reduce_min(v)],"weightmin")
             a = tf.Print(a,[v.name,tf.reduce_mean(g)/(tf.reduce_mean(v)+1e-20)],"rate")
         self.net["train_op"] = opt.apply_gradients(gradients)
         self.net["g"] = a
@@ -205,8 +207,8 @@ class ADAPT(Network):
         assert self.data is not None,"data is None"
         assert self.sess is not None,"sess is None"
         self.net["is_training"] = tf.placeholder(tf.bool)
-        x_train,y_train,iterator_train = self.data.next_data(category="train",batch_size=batch_size,epoches=-1)
-        x_val,y_val,iterator_val = self.data.next_data(category="val",batch_size=batch_size,epoches=-1)
+        x_train,y_train,_,iterator_train = self.data.next_batch(category="train",batch_size=batch_size,epoches=-1)
+        x_val,y_val,_,iterator_val = self.data.next_batch(category="val",batch_size=batch_size,epoches=-1)
         x = tf.cond(self.net["is_training"],lambda:x_train,lambda:x_val)
         y = tf.cond(self.net["is_training"],lambda:y_train,lambda:y_val)
         self.build()
@@ -232,19 +234,15 @@ class ADAPT(Network):
             epoch,i = 0.0,0
             iterations_per_epoch_train = self.data.get_data_len() // batch_size
             while epoch < epoches:
-                #if i == 5*iterations_per_epoch_train:
-                #    new_lr = 0.0003
-                #    print("save model before new_lr:%f" % new_lr)
-                #    self.saver["lr"].save(self.sess,os.path.join(self.config.get("saver_path","saver"),"lr-%f" % base_lr),global_step=i)
-                #    self.sess.run(tf.assign(self.net["lr"],new_lr))
-                #    base_lr = new_lr
+                if i == 10*iterations_per_epoch_train:
+                    new_lr = 0.0003
+                    print("save model before new_lr:%f" % new_lr)
+                    self.saver["lr"].save(self.sess,os.path.join(self.config.get("saver_path","saver"),"lr-%f" % base_lr),global_step=i)
+                    self.sess.run(tf.assign(self.net["lr"],new_lr))
+                    base_lr = new_lr
 
                 data_x,data_y = self.sess.run([x,y],feed_dict={self.net["is_training"]:True})
                 params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_probe"]:0.5}
-                #l,_,_ = self.sess.run([self.net["lr"],self.a,self.net["train_op"]],feed_dict=params)
-                #print("lr: %f" % l)
-                #print("x mean:%f, y mean: %f" % (np.mean(data_x),np.mean(data_y)))
-                #print("x min:%f, y min: %f" % (np.amin(data_x),np.min(data_y)))
                 if i%1000 == 0:
                     _ = self.sess.run([self.net["g"],self.net["train_op"]],feed_dict=params)
                 elif i%100 in [1,2,3,4,5,6,7,8,9]:
@@ -290,4 +288,4 @@ if __name__ == "__main__":
     data = dataset({"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num})
     adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"init_model_path":"./model/init.npy"})
     #adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"model_path":"old_saver/20180110-6-0/norm-32999"})
-    adapt.train(base_lr=0.1,weight_decay=1e-5,momentum=0.9,batch_size=batch_size,epoches=epoches)
+    adapt.train(base_lr=0.001,weight_decay=5e-4,momentum=0.9,batch_size=batch_size,epoches=epoches)
