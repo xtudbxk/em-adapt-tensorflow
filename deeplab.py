@@ -202,9 +202,10 @@ class ADAPT(Network):
             a = tf.Print(a,[v.name,tf.reduce_min(v)],"weightmin")
             a = tf.Print(a,[v.name,tf.reduce_mean(g)/(tf.reduce_mean(v)+1e-20)],"rate")
 
-        self.net["accum_gradient_accum"] = tf.group([self.net["accum_gradient"][i].assign_add( g/self.accum_num ) for (i,g) in enumerate(gradients)])
-        self.net["accum_gradient_clean"] = tf.group([g.assign(tf.zeros_like(g)) for g,v in self.net["accum_gradient"]])
-        self.net["accum_gradient_update"]  = opt.apply_gradients(self.net["accum_gradient"])
+        self.net["accum_gradient_accum"] = [self.net["accum_gradient"][i].assign_add( g[0]/self.accum_num ) for (i,g) in enumerate(gradients)]
+        self.net["accum_gradient_clean"] = [g.assign(tf.zeros_like(g)) for g in self.net["accum_gradient"]]
+        gradients = [(g,self.trainable_list[i]) for i,g in enumerate(self.net["accum_gradient"])]
+        self.net["accum_gradient_update"]  = opt.apply_gradients(gradients)
 
         self.net["train_op"] = opt.apply_gradients(gradients)
         self.net["g"] = a
@@ -254,7 +255,7 @@ class ADAPT(Network):
                     _ = self.sess.run(self.net["accum_gradient_update"])
                     _ = self.sess.run(self.net["accum_gradient_clean"])
                 if i%1000 == 0:
-                    _ = self.sess.run(self.net["g"]],feed_dict=params)
+                    _ = self.sess.run(self.net["g"],feed_dict=params)
                 elif i%100 in [1,2,3,4,5,6,7,8,9]:
                     self.sess.run(self.metrics["update"],feed_dict=params)
                 elif i%100 == 10:
@@ -294,6 +295,6 @@ if __name__ == "__main__":
     category_num = 21
     epoches = 20
     data = dataset({"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num})
-    adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"init_model_path":"./model/init.npy","accum_num":3})
+    adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"init_model_path":"./model/init.npy","accum_num":5})
     #adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"model_path":"old_saver/20180110-6-0/norm-32999"})
     adapt.train(base_lr=0.001,weight_decay=5e-4,momentum=0.9,batch_size=batch_size,epoches=epoches)
