@@ -23,7 +23,9 @@ float *e_step(float *map,const int *shape,const int *stride,const int *label,con
         }
         for(int h=0; h<shape[1]; h+=2){
             for(int w=0; w<shape[2]; w+=2){
-                *(label_+b*shape[3]+*(label+b*total_pixel_each_image+h*shape[2]+w)) = 1;
+		int tmp = *(label+b*total_pixel_each_image+h*shape[2]+w);
+		if(tmp >= shape[3]){continue;} // ignore void label
+                *(label_+b*shape[3]+tmp) = 1;
             }
         }
     }
@@ -112,6 +114,8 @@ float *e_step(float *map,const int *shape,const int *stride,const int *label,con
         free(label_single);
         free(min_of_present_label_);
         free(diff);
+	free(stride_);
+        free(label_);
     }
 //    struct timeval e;
 //    gettimeofday(&e,NULL);

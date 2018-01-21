@@ -39,6 +39,7 @@ def estep_py(feature_map,label,suppress_others,num_iter,margin_others,bg_p,fg_p)
         index = np.unique(label[i])
         #print("index:%s" % str(index))
         for one in index:
+            if one >= feature_map.shape[3]: continue
             label_[i,one] = 1
     label = label_
     #print("after label:%s" % str(label))

@@ -196,7 +196,7 @@ class ADAPT(Network):
             if v in self.lr_20_list:
                 g = 20*g
             
-            a = tf.Print(a,[g.name,tf.reduce_mean(g)],"gradient")
+            a = tf.Print(a,[v.name,tf.reduce_mean(g)],"gradient")
             a = tf.Print(a,[v.name,tf.reduce_mean(v)],"weight")
             a = tf.Print(a,[v.name,tf.reduce_max(v)],"weightmax")
             a = tf.Print(a,[v.name,tf.reduce_min(v)],"weightmin")

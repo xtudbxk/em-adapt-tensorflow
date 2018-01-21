@@ -67,10 +67,11 @@ class Network():
         self.net["lr"] = tf.Variable(base_lr, trainable=False)
         opt = tf.train.MomentumOptimizer(self.net["lr"],momentum)
         gradients = opt.compute_gradients(self.loss["total"],var_list=self.trainable_list)
-        self.net["accum_gradient_accum"] = tf.group([self.net["accum_gradient"][i].assign_add( g/self.accum_num ) for (i,g) in enumerate(gradients)])
-        self.net["accum_gradient_clean"] = tf.group([g.assign(tf.zeros_like(g)) for g,v in self.net["accum_gradient"]])
-        self.net["accum_gradient_update"]  = opt.apply_gradients(self.net["accum_gradient"])
 
+        self.net["accum_gradient_accum"] = [self.net["accum_gradient"][i].assign_add( g[0]/self.accum_num ) for (i,g) in enumerate(gradients)]
+        self.net["accum_gradient_clean"] = [g.assign(tf.zeros_like(g)) for g in self.net["accum_gradient"]]
+        gradients = [(g,self.trainable_list[i]) for i,g in enumerate(self.net["accum_gradient"])]
+        self.net["accum_gradient_update"]  = opt.apply_gradients(gradients)
         self.net["train_op"] = opt.apply_gradients(gradients)
 
 
