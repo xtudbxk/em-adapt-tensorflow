@@ -108,7 +108,7 @@ class Network():
 
             start_time = time.time()
             print("start_time: %f" % start_time)
-            print("config -- lr:%f weight_decay:%f momentum:%f batch_size:%f epoches:%f" % (base_lr,weight_decay,momentum,base_lr,epoches))
+            print("config -- lr:%f weight_decay:%f momentum:%f batch_size:%f epoches:%f" % (base_lr,weight_decay,momentum,batch_size,epoches))
 
             epoch,i = 0.0,0
             iterations_per_epoch_train = self.data.get_data_len() // batch_size

@@ -210,6 +210,18 @@ class ADAPT(Network):
         self.net["train_op"] = opt.apply_gradients(gradients)
         self.net["g"] = a
 
+    def image_summary(self):
+            upsample = 250/self.category_num
+            gt_single = tf.to_float(self.net["label"])*upsample
+            gt_rgb = tf.concat([gt_single,gt_single,gt_single],axis=3)
+            estep_single = tf.to_float(tf.image.resize_nearest_neighbor(tf.expand_dims(self.net["e_argmax"],axis=3),(self.h,self.w)))*upsample
+            estep_rgb = tf.concat([estep_single,estep_single,estep_single],axis=3)
+            pred_single = tf.to_float(tf.reshape(self.net["pred"],[-1,self.h,self.w,1]))*upsample
+            pred_rgb = tf.concat([pred_single,pred_single,pred_single],axis=3)
+            self.images["image"] = tf.concat([tf.cast(self.net["input"]+self.data.img_mean,tf.uint8),tf.cast(gt_rgb,tf.uint8),tf.cast(estep_rgb,tf.uint8),tf.cast(pred_rgb,tf.uint8)],axis=2)
+            return ["image"]
+
+
     def train(self,base_lr,weight_decay,momentum,batch_size,epoches):
         assert self.data is not None,"data is None"
         assert self.sess is not None,"sess is None"
@@ -242,7 +254,7 @@ class ADAPT(Network):
             iterations_per_epoch_train = self.data.get_data_len() // batch_size
             while epoch < epoches:
                 if i == 10*iterations_per_epoch_train:
-                    new_lr = 0.0003
+                    new_lr = 0.03
                     print("save model before new_lr:%f" % new_lr)
                     self.saver["lr"].save(self.sess,os.path.join(self.config.get("saver_path","saver"),"lr-%f" % base_lr),global_step=i)
                     self.sess.run(tf.assign(self.net["lr"],new_lr))
@@ -295,6 +307,6 @@ if __name__ == "__main__":
     category_num = 21
     epoches = 20
     data = dataset({"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num})
-    adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"init_model_path":"./model/init.npy","accum_num":5})
-    #adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"model_path":"old_saver/20180110-6-0/norm-32999"})
-    adapt.train(base_lr=0.001,weight_decay=5e-4,momentum=0.9,batch_size=batch_size,epoches=epoches)
+    #adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"init_model_path":"./model/init.npy","accum_num":5})
+    adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"model_path":"old_saver/20180120-2-0/norm-32999"})
+    adapt.train(base_lr=0.1,weight_decay=1e-7,momentum=0.9,batch_size=batch_size,epoches=epoches)
