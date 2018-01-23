@@ -261,7 +261,7 @@ class ADAPT(Network):
                 if i == 0:
                     self.sess.run(tf.assign(self.net["lr"],base_lr))
                 if i == 10*iterations_per_epoch_train:
-                    new_lr = 0.01
+                    new_lr = 0.0001
                     print("save model before new_lr:%f" % new_lr)
                     self.saver["lr"].save(self.sess,os.path.join(self.config.get("saver_path","saver"),"lr-%f" % base_lr),global_step=i)
                     self.sess.run(tf.assign(self.net["lr"],new_lr))
@@ -316,4 +316,4 @@ if __name__ == "__main__":
     data = dataset({"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num})
     adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"init_model_path":"./model/init.npy","accum_num":5})
     #adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"model_path":"old_saver/20180120-2-0/norm-32999","accum_num":5})
-    adapt.train(base_lr=0.1,weight_decay=1e-10,momentum=0.9,batch_size=batch_size,epoches=epoches)
+    adapt.train(base_lr=0.001,weight_decay=1e-10,momentum=0.9,batch_size=batch_size,epoches=epoches)
