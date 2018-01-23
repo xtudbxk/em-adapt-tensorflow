@@ -196,11 +196,16 @@ class ADAPT(Network):
             if v in self.lr_20_list:
                 g = 20*g
             
-            a = tf.Print(a,[v.name,tf.reduce_mean(g)],"gradient")
-            a = tf.Print(a,[v.name,tf.reduce_mean(v)],"weight")
+            a = tf.Print(a,[v.name,tf.reduce_mean(tf.abs(g))],"gradientmean")
+            a = tf.Print(a,[v.name,tf.reduce_max(g)],"gradientmax")
+            a = tf.Print(a,[v.name,tf.reduce_min(g)],"gradientmin")
+            a = tf.Print(a,[v.name,tf.reduce_mean(tf.abs(v))],"weightmean")
             a = tf.Print(a,[v.name,tf.reduce_max(v)],"weightmax")
             a = tf.Print(a,[v.name,tf.reduce_min(v)],"weightmin")
-            a = tf.Print(a,[v.name,tf.reduce_mean(g)/(tf.reduce_mean(v)+1e-20)],"rate")
+            b = g/(v+1e-20)
+            a = tf.Print(a,[v.name,tf.reduce_mean(tf.abs(b))],"ratemean")
+            a = tf.Print(a,[v.name,tf.reduce_max(b)],"ratemax")
+            a = tf.Print(a,[v.name,tf.reduce_min(b)],"ratemin")
 
         self.net["accum_gradient_accum"] = [self.net["accum_gradient"][i].assign_add( g[0]/self.accum_num ) for (i,g) in enumerate(gradients)]
         self.net["accum_gradient_clean"] = [g.assign(tf.zeros_like(g)) for g in self.net["accum_gradient"]]
@@ -253,8 +258,10 @@ class ADAPT(Network):
             epoch,i = 0.0,0
             iterations_per_epoch_train = self.data.get_data_len() // batch_size
             while epoch < epoches:
+                if i == 0:
+                    self.sess.run(tf.assign(self.net["lr"],base_lr))
                 if i == 10*iterations_per_epoch_train:
-                    new_lr = 0.03
+                    new_lr = 0.01
                     print("save model before new_lr:%f" % new_lr)
                     self.saver["lr"].save(self.sess,os.path.join(self.config.get("saver_path","saver"),"lr-%f" % base_lr),global_step=i)
                     self.sess.run(tf.assign(self.net["lr"],new_lr))
@@ -266,15 +273,15 @@ class ADAPT(Network):
                 if i % self.accum_num == self.accum_num - 1:
                     _ = self.sess.run(self.net["accum_gradient_update"])
                     _ = self.sess.run(self.net["accum_gradient_clean"])
-                if i%1000 == 0:
+                if i%2000 == 0:
                     _ = self.sess.run(self.net["g"],feed_dict=params)
-                elif i%100 in [1,2,3,4,5,6,7,8,9]:
+                elif i%500 in [1,2,3,4,5,6,7,8,9]:
                     self.sess.run(self.metrics["update"],feed_dict=params)
-                elif i%100 == 10:
+                elif i%500 == 10:
                     summarys,accu,miou,loss,lr = self.sess.run([self.summary["train"]["op"],self.metrics["accu"],self.metrics["miou"],self.loss["total"],self.net["lr"]],feed_dict=params)
                     self.summary["writer"].add_summary(summarys,i)
                     print("epoch:%f, iteration:%f, lr:%f, loss:%f, accu:%f, miou:%f" % (epoch,i,lr,loss,accu,miou))
-                elif i%100 == 11:
+                elif i%500 == 11:
                     self.sess.run(self.metrics["reset"],feed_dict=params)
 
                 if i%2000 in [10,11,12,13,14,15,16,17,18,19]:
@@ -292,7 +299,7 @@ class ADAPT(Network):
                     params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_probe"]:0.5}
                     self.sess.run(self.metrics["reset"],feed_dict=params)
 
-                if i%3000 == 2999:
+                if i%6000 == 5999:
                     self.saver["norm"].save(self.sess,os.path.join(self.config.get("saver_path","saver"),"norm"),global_step=i)
                 i+=1
                 epoch = i / iterations_per_epoch_train
@@ -307,6 +314,6 @@ if __name__ == "__main__":
     category_num = 21
     epoches = 20
     data = dataset({"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num})
-    #adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"init_model_path":"./model/init.npy","accum_num":5})
-    adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"model_path":"old_saver/20180120-2-0/norm-32999"})
-    adapt.train(base_lr=0.1,weight_decay=1e-7,momentum=0.9,batch_size=batch_size,epoches=epoches)
+    adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"init_model_path":"./model/init.npy","accum_num":5})
+    #adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"model_path":"old_saver/20180120-2-0/norm-32999","accum_num":5})
+    adapt.train(base_lr=0.1,weight_decay=1e-10,momentum=0.9,batch_size=batch_size,epoches=epoches)

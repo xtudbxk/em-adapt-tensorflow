@@ -67,6 +67,19 @@ class Network():
         self.net["lr"] = tf.Variable(base_lr, trainable=False)
         opt = tf.train.MomentumOptimizer(self.net["lr"],momentum)
         gradients = opt.compute_gradients(self.loss["total"],var_list=self.trainable_list)
+        a = tf.Variable(1.0,dtype=tf.float32)
+        for (g,v) in gradients:
+            a = tf.Print(a,[v.name,tf.reduce_mean(tf.abs(g))],"gradientmean")
+            a = tf.Print(a,[v.name,tf.reduce_max(g)],"gradientmax")
+            a = tf.Print(a,[v.name,tf.reduce_min(g)],"gradientmin")
+            a = tf.Print(a,[v.name,tf.reduce_mean(tf.abs(v))],"weightmean")
+            a = tf.Print(a,[v.name,tf.reduce_max(v)],"weightmax")
+            a = tf.Print(a,[v.name,tf.reduce_min(v)],"weightmin")
+            b = g/(v+1e-20)
+            a = tf.Print(a,[v.name,tf.reduce_mean(tf.abs(b))],"ratemean")
+            a = tf.Print(a,[v.name,tf.reduce_max(b)],"ratemax")
+            a = tf.Print(a,[v.name,tf.reduce_min(b)],"ratemin")
+        self.net["g"] = a
 
         self.net["accum_gradient_accum"] = [self.net["accum_gradient"][i].assign_add( g[0]/self.accum_num ) for (i,g) in enumerate(gradients)]
         self.net["accum_gradient_clean"] = [g.assign(tf.zeros_like(g)) for g in self.net["accum_gradient"]]
@@ -113,6 +126,8 @@ class Network():
             epoch,i = 0.0,0
             iterations_per_epoch_train = self.data.get_data_len() // batch_size
             while epoch < epoches:
+                if i == 0: # to protect restore
+                    self.sess.run(tf.assign(self.net["lr"],base_lr))
                 if i == 40*iterations_per_epoch_train:
                     new_lr = 0.003
                     print("save model before new_lr:%f" % new_lr)
@@ -221,8 +236,8 @@ class Network():
             for layer in save_layers:
                 tf.add_to_collection(layer,self.net[layer])
 
-            self.saver["norm"] = tf.train.Saver(max_to_keep=3)
-            self.saver["lr"] = tf.train.Saver()
+            self.saver["norm"] = tf.train.Saver(max_to_keep=3,var_list=self.trainable_list)
+            self.saver["lr"] = tf.train.Saver(var_list=self.trainable_list)
 
     def restore_from_model(self,saver,model_path,checkpoint=False):
         assert self.sess is not None
