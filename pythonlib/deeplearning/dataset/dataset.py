@@ -172,7 +172,7 @@ class dataset_tf(dataset):
             label = tf.image.decode_image(label_raw)
             label = tf.expand_dims(label,axis=0)
             if category == "train":
-                img,label = self.image_preprocess(img,label,random_scale=True,flip=True,rotate=True)
+                img,label = self.image_preprocess(img,label,random_scale=True,flip=True,rotate=False)
             else:
                 img,label = self.image_preprocess(img,label,random_scale=False)
 

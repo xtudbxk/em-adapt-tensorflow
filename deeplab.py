@@ -46,7 +46,8 @@ class ADAPT(Network):
             fc = self.build_fc(block,["fc6","relu6","drop6","fc7","relu7","drop7","fc8"])
 
             # classifier
-            return tf.nn.softmax(self.net[fc])
+            #return tf.nn.softmax(self.net[fc])
+            return self.net[fc]
 
     def build_block(self,last_layer,layer_lists):
         for layer in layer_lists:
@@ -228,6 +229,8 @@ class ADAPT(Network):
 
 
     def train(self,base_lr,weight_decay,momentum,batch_size,epoches):
+        gpu_options = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.8))
+        self.sess = tf.Session(config=gpu_options)
         assert self.data is not None,"data is None"
         assert self.sess is not None,"sess is None"
         self.net["is_training"] = tf.placeholder(tf.bool)
@@ -267,8 +270,9 @@ class ADAPT(Network):
                     self.sess.run(tf.assign(self.net["lr"],new_lr))
                     base_lr = new_lr
 
+
                 data_x,data_y = self.sess.run([x,y],feed_dict={self.net["is_training"]:True})
-                params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_probe"]:0.5}
+                params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_probe"]:0.3}
                 self.sess.run(self.net["accum_gradient_accum"],feed_dict=params)
                 if i % self.accum_num == self.accum_num - 1:
                     _ = self.sess.run(self.net["accum_gradient_update"])
@@ -309,7 +313,7 @@ class ADAPT(Network):
             print("duration time:%f" %  (end_time-start_time))
 
 if __name__ == "__main__":
-    batch_size = 6 # the actual batch size is  batch_size * accum_num
+    batch_size = 4 # the actual batch size is  batch_size * accum_num
     input_size = (321,321)
     category_num = 21
     epoches = 20

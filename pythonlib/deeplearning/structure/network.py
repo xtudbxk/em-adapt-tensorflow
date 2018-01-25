@@ -11,7 +11,7 @@ class Network():
         self.category_num = self.config.get("category_num",21)
         self.accum_num = self.config.get("accum_num",1)
         self.data = self.config.get("data",None)
-        self.sess = self.config.get("sess",tf.Session())
+        #self.sess = self.config.get("sess",tf.Session())
         self.net = {}
         self.weights = {}
         self.trainable_list = []
@@ -106,6 +106,8 @@ class Network():
         self.build()
         self.pre_train(base_lr,weight_decay,momentum,batch_size,save_layers=["input","output","label","pred","is_training"])
 
+        gpu_options = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.9))
+        self.sess = tf.Session(config=gpu_options)
         with self.sess.as_default():
             self.sess.run(tf.global_variables_initializer())
             self.sess.run(tf.local_variables_initializer())
