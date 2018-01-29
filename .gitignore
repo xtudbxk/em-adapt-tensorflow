@@ -3,3 +3,6 @@ model/*
 log/*
 saver/*
 pascal_voc
+DataVisualization/*
+sh/*
+weak2/*
