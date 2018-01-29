@@ -1,8 +1,11 @@
 *.pyc
 model/*
 log/*
+old_log/*
 saver/*
+old_saver/*
 pascal_voc
+pascal
 DataVisualization/*
 sh/*
 weak2/*
