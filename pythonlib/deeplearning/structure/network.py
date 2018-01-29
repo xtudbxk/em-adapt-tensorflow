@@ -35,7 +35,7 @@ class Network():
     def create_network(self,layer):
         if "init_model_path" in self.config:
             self.load_init_model()
-        return layer
+        return layer # note no softmax
 
     # need to rewrite
     def pred(self):
@@ -104,7 +104,7 @@ class Network():
         x = tf.cond(self.net["is_training"],lambda:x_train,lambda:x_val)
         y = tf.cond(self.net["is_training"],lambda:y_train,lambda:y_val)
         self.build()
-        self.pre_train(base_lr,weight_decay,momentum,batch_size,save_layers=["input","output","label","pred","is_training"])
+        self.pre_train(base_lr,weight_decay,momentum,batch_size,save_layers=["input","rescale_output","output","label","pred","is_training"])
 
         gpu_options = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.9))
         self.sess = tf.Session(config=gpu_options)
@@ -127,6 +127,7 @@ class Network():
 
             epoch,i = 0.0,0
             iterations_per_epoch_train = self.data.get_data_len() // batch_size
+            self.metrics["best_val_miou"] = 0.6
             while epoch < epoches:
                 if i == 0: # to protect restore
                     self.sess.run(tf.assign(self.net["lr"],base_lr))
@@ -158,6 +159,9 @@ class Network():
                     params = {self.net["input"]:data_x,self.net["label"]:data_y}
                     summarys,accu,miou,loss,lr = self.sess.run([self.summary["val"]["op"],self.metrics["accu"],self.metrics["miou"],self.loss["total"],self.net["lr"]],feed_dict=params)
                     self.summary["writer"].add_summary(summarys,i)
+                    if miou > self.metrics["best_val_miou"]:
+                        self.saver["best"].save(self.sess,os.path.join(self.config.get("saver_path","saver"),"best-val-miou-%f" % miou),global_step=i)
+                        self.metrics["best_val_miou"] = miou
                     print("val epoch:%f, iteration:%f, lr:%f, loss:%f, accu:%f, miou:%f" % (epoch,i,lr,loss,accu,miou))
                 if i%1000 == 20:
                     data_x,data_y = self.sess.run([x,y],feed_dict={self.net["is_training"]:False})
@@ -203,7 +207,6 @@ class Network():
         return gt,output
 
     def pre_train(self,base_lr,weight_decay,momentum,batch_size,save_layers=["input","output","label","pred"]):
-        assert self.sess is not None,"sess is None"
         self.net["accum_gradient"] = [tf.Variable(tf.zeros_like(v),trainable=False) for v in self.trainable_list]
         summarys = {}
         with self.sess.as_default():
@@ -238,8 +241,9 @@ class Network():
             for layer in save_layers:
                 tf.add_to_collection(layer,self.net[layer])
 
-            self.saver["norm"] = tf.train.Saver(max_to_keep=3,var_list=self.trainable_list)
+            self.saver["norm"] = tf.train.Saver(max_to_keep=2,var_list=self.trainable_list)
             self.saver["lr"] = tf.train.Saver(var_list=self.trainable_list)
+            self.saver["best"] = tf.train.Saver(var_list=self.trainable_list,max_to_keep=2)
 
     def restore_from_model(self,saver,model_path,checkpoint=False):
         assert self.sess is not None

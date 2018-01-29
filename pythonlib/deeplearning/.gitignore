@@ -1,0 +1,6 @@
+*.png
+__pycache__/*
+cifar10/*
+cifar10
+pascal_voc
+structure/trained_model/*

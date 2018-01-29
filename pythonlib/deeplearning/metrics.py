@@ -3,27 +3,6 @@ import numpy as np
 import skimage as sk
 import skimage.io as imgio
 
-
-def metrics_summary():
-    pixel_accu_ph = tf.placeholder(dtype=tf.float16)
-    pixel_accu_s_train = tf.summary.scalar("train_pixel_accu_train",pixel_accu_ph)
-    pixel_accu_s_test = tf.summary.scalar("pixel_accu_test",pixel_accu_ph)
-    mIoU_ph = tf.placeholder(dtype=tf.float16)
-    mIoU_s_train = tf.summary.scalar("mIoU_train",mIoU_ph)
-    mIoU_s_test = tf.summary.scalar("mIoU_test",mIoU_ph)
-    tf.summary.scalar("mIoU",mIoU_ph)
-    fIoU_ph = tf.placeholder(dtype=tf.float16)
-    fIoU_s_train = tf.summary.scalar("fIoU_train",fIoU_ph)
-    fIoU_s_test = tf.summary.scalar("fIoU_test",fIoU_ph)
-
-    train_s = tf.summary.merge([pixel_accu_s_train,mIoU_s_train,fIoU_s_train])
-    test_s = tf.summary.merge([pixel_accu_s_test,mIoU_s_test,fIoU_s_test])
-    return pixel_accu_ph,mIoU_ph,fIoU_ph,train_s,test_s
-
-def accuracy(gt,pred,one_hot=False):
-    accu_n = np.sum(np.equal(gt,pred).astype("int16"))
-    return accu_n / gt.shape[0]
-
 def metrics_tf(gt,pred,num,shape,kinds=["miou"]):
     ret = {"t_i":[],"n_j_i":[],"n_i_i":[]}
     for i in range(num):
@@ -109,33 +88,65 @@ def metrics_update(loss,optimizer,kinds=["gradient","weight","rate"],first_n=-1,
     optim = optimizer.apply_gradients(gradients)
     return optim,a
 
+
 # Originally written by wkentaro for the numpy version
 # https://github.com/wkentaro/pytorch-fcn/blob/master/torchfcn/utils.py
-def _fast_hist(label_true,label_pred,n_class):
-    mask = (label_true>=0) & (label_true<n_class) # to ignore void label
-    hist = np.bincount( n_class * label_true[mask].astype(int)+label_pred[mask],minlength=n_class**2).reshape(n_class,n_class)
-    return hist
+class metrics_np():
+    def __init__(self,n_class=1,hist=None):
+        if hist is None:
+            self.hist = np.zeros((n_class,n_class))
+        else:
+            self.hist = hist
+        self.n_class = n_class
 
-def metrics_np(label_trues,label_preds,n_class): # note label_trues and label_preds are all predicting images and different images is concate by list type
-    hist = np.zeros((n_class,n_class))
-    for lt,lp in zip(label_trues,label_preds):
-        hist += _fast_hist(lt.flatten(),lp.flatten(),n_class)
-    metrics = {}
-    metrics["accu"] = np.diag(hist).sum() / hist.sum() # total pixel accuracy
-    metrics["accus"] = np.diag(hist) / hist.sum(axis=1) # pixel accuracys for each category, np.nan represent the corresponding category not exists
-    metrics["iou"] = np.diag(hist) / (hist.sum(axis=1)+hist.sum(axis=0) - np.diag(hist))
-    metrics["miou"] = np.nanmean(metrics["iou"])
-    metrics["freq"] = hist.sum(axis=1) / hist.sum() # the frequency for each categorys
-    metrics["fiou"] = (metrics["freq"][metrics["freq"]>0]*metrics["iou"][metrics["freq"]>0]).sum()
-    metrics["dices"] = 2*np.diag(hist) / (hist.sum(axis=1)+hist.sum(axis=0))
-    metrics["mdice"] = np.nanmean(metrics["dices"])
+    def _fast_hist(self,label_true,label_pred,n_class):
+        mask = (label_true>=0) & (label_true<n_class) # to ignore void label
+        self.hist = np.bincount( n_class * label_true[mask].astype(int)+label_pred[mask],minlength=n_class**2).reshape(n_class,n_class)
+        return self.hist
 
-    return metrics
+    def update(self,x,y):
+        self.hist += self._fast_hist(x.flatten(),y.flatten(),self.n_class)
+
+    def get(self,kind="miou"):
+        if kind == "accu":
+            return np.diag(self.hist).sum() / self.hist.sum() # total pixel accuracy
+        elif kind == "accus":
+            return np.diag(self.hist) / self.hist.sum(axis=1) # pixel accuracys for each category, np.nan represent the corresponding category not exists
+        elif kind in ["freq","fiou","iou","miou"]:
+            iou = np.diag(self.hist) / (self.hist.sum(axis=1)+self.hist.sum(axis=0) - np.diag(self.hist))
+            if kind == "iou": return iou
+            miou = np.nanmean(iou)
+            if kind == "miou": return miou
+
+            freq = self.hist.sum(axis=1) / self.hist.sum() # the frequency for each categorys
+            if kind == "freq": return freq
+            else: return (freq[freq>0]*iou[freq>0]).sum()
+        elif kind in ["dice","mdice"]:
+            dice = 2*np.diag(self.hist) / (self.hist.sum(axis=1)+self.hist.sum(axis=0))
+            if kind == "dice": return dice
+            else: return np.nanmean(dice)
+        return None
+
+    def get_all(self):
+     metrics = {}
+     metrics["accu"] = np.diag(self.hist).sum() / self.hist.sum() # total pixel accuracy
+     metrics["accus"] = np.diag(self.hist) / self.hist.sum(axis=1) # pixel accuracys for each category, np.nan represent the corresponding category not exists
+     metrics["iou"] = np.diag(self.hist) / (self.hist.sum(axis=1)+self.hist.sum(axis=0) - np.diag(self.hist))
+     metrics["miou"] = np.nanmean(metrics["iou"])
+     metrics["freq"] = self.hist.sum(axis=1) / self.hist.sum() # the frequency for each categorys
+     metrics["fiou"] = (metrics["freq"][metrics["freq"]>0]*metrics["iou"][metrics["freq"]>0]).sum()
+     metrics["dices"] = 2*np.diag(self.hist) / (self.hist.sum(axis=1)+self.hist.sum(axis=0))
+     metrics["mdice"] = np.nanmean(metrics["dices"])
+ 
+     return metrics
+
+def test_np():
+    gt = np.array([[1,0],[1,1]],dtype=np.uint8)
+    pred = np.array([[1,0],[1,0]],dtype=np.uint8)
+    m = metrics_np(n_class=2)
+    m.update(gt,pred)
+    print("iou:%s" % str(m.get("iou")))
+    print("all:%s" % str(m.get_all()))
 
 if __name__ == "__main__":
-    f = "pascal_voc/annotations/2007_000032.png"
-    gt = imgio.imread(f)
-    gt = sk.img_as_ubyte(gt)
-    pred = gt
-    print("iou:%s" % str(metrics_np(gt,pred,21)))
-
+    test_np()

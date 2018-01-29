@@ -229,7 +229,7 @@ class ADAPT(Network):
 
 
     def train(self,base_lr,weight_decay,momentum,batch_size,epoches):
-        gpu_options = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.8))
+        gpu_options = tf.ConfigProto(gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.75))
         self.sess = tf.Session(config=gpu_options)
         assert self.data is not None,"data is None"
         assert self.sess is not None,"sess is None"
@@ -260,11 +260,12 @@ class ADAPT(Network):
 
             epoch,i = 0.0,0
             iterations_per_epoch_train = self.data.get_data_len() // batch_size
+            self.metrics["best_val_miou"] = 0.2
             while epoch < epoches:
                 if i == 0:
                     self.sess.run(tf.assign(self.net["lr"],base_lr))
                 if i == 10*iterations_per_epoch_train:
-                    new_lr = 0.0001
+                    new_lr = 0.000001
                     print("save model before new_lr:%f" % new_lr)
                     self.saver["lr"].save(self.sess,os.path.join(self.config.get("saver_path","saver"),"lr-%f" % base_lr),global_step=i)
                     self.sess.run(tf.assign(self.net["lr"],new_lr))
@@ -272,7 +273,7 @@ class ADAPT(Network):
 
 
                 data_x,data_y = self.sess.run([x,y],feed_dict={self.net["is_training"]:True})
-                params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_probe"]:0.3}
+                params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_probe"]:0.5}
                 self.sess.run(self.net["accum_gradient_accum"],feed_dict=params)
                 if i % self.accum_num == self.accum_num - 1:
                     _ = self.sess.run(self.net["accum_gradient_update"])
@@ -290,17 +291,20 @@ class ADAPT(Network):
 
                 if i%2000 in [10,11,12,13,14,15,16,17,18,19]:
                     data_x,data_y = self.sess.run([x,y],feed_dict={self.net["is_training"]:False})
-                    params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_probe"]:0.5}
+                    params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_probe"]:1.0}
                     self.sess.run(self.metrics["update"],feed_dict=params)
                 if i%2000 == 19:
                     data_x,data_y = self.sess.run([x,y],feed_dict={self.net["is_training"]:False})
-                    params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_probe"]:0.5}
+                    params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_probe"]:1.0}
                     summarys,accu,miou,loss,lr = self.sess.run([self.summary["val"]["op"],self.metrics["accu"],self.metrics["miou"],self.loss["total"],self.net["lr"]],feed_dict=params)
                     self.summary["writer"].add_summary(summarys,i)
+                    if miou > self.metrics["best_val_miou"]:
+                        self.saver["best"].save(self.sess,os.path.join(self.config.get("saver_path","saver"),"best-val-miou-%f" % miou),global_step=i)
+                        self.metrics["best_val_miou"] = miou
                     print("val epoch:%f, iteration:%f, lr:%f, loss:%f, accu:%f, miou:%f" % (epoch,i,lr,loss,accu,miou))
                 if i%2000 == 20:
                     data_x,data_y = self.sess.run([x,y],feed_dict={self.net["is_training"]:False})
-                    params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_probe"]:0.5}
+                    params = {self.net["input"]:data_x,self.net["label"]:data_y,self.net["drop_probe"]:1.0}
                     self.sess.run(self.metrics["reset"],feed_dict=params)
 
                 if i%6000 == 5999:
@@ -308,16 +312,17 @@ class ADAPT(Network):
                 i+=1
                 epoch = i / iterations_per_epoch_train
 
+            self.saver["norm"].save(self.sess,os.path.join(self.config.get("saver_path","saver"),"norm"),global_step=i)
             end_time = time.time()
             print("end_time:%f" % end_time)
             print("duration time:%f" %  (end_time-start_time))
 
 if __name__ == "__main__":
-    batch_size = 4 # the actual batch size is  batch_size * accum_num
+    batch_size = 6 # the actual batch size is  batch_size * accum_num
     input_size = (321,321)
     category_num = 21
     epoches = 20
     data = dataset({"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num})
-    adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"init_model_path":"./model/init.npy","accum_num":5})
-    #adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"model_path":"old_saver/20180120-2-0/norm-32999","accum_num":5})
-    adapt.train(base_lr=0.001,weight_decay=1e-10,momentum=0.9,batch_size=batch_size,epoches=epoches)
+    #adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"init_model_path":"./model/init.npy","accum_num":5})
+    adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"model_path":"old_saver/20180120-6-0/norm-47999","accum_num":5})
+    adapt.train(base_lr=0.00001,weight_decay=1e-5,momentum=0.9,batch_size=batch_size,epoches=epoches)

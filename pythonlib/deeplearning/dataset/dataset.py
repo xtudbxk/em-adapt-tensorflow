@@ -15,8 +15,11 @@ class dataset():
         self.config = config
         self.w,self.h = self.config.get("input_size",(240,240))
         self.categorys = self.config.get("categorys",["train","val"])
+        assert len(self.categorys) > 0, "no enough categorys in dataset"
         self.main_path = self.config.get("main_path",os.path.join("pascal","VOCdevkit","VOC2012"))
+        #self.main_path = self.config.get("main_path",os.path.join("pascal"))
         self.ignore_label = self.config.get("ignore_label",255)
+        self.default_category = self.config.get("default_category",self.categorys[0])
         self.img_mean = np.ones((self.w,self.h,3))
         self.img_mean[:,:,0] *= 104.00698793
         self.img_mean[:,:,1] *= 116.66876762
@@ -26,7 +29,7 @@ class dataset():
     def init(self):
         self.data_f,self.data_len = self.get_data_f()
         self.data = self.get_data()
-        self.info = self.reset_info()
+        self.reset_info()
 
     def get_data_f(self):
         data_f = {}
@@ -41,6 +44,13 @@ class dataset():
                     data_f[one]["id"].append(line)
                     data_f[one]["img"].append(os.path.join(self.main_path,"JPEGImages","%s.jpg" % line))
                     data_f[one]["label"].append(os.path.join(self.main_path,"SegmentationClassAug","%s.png" % line))
+                    #data_f[one]["img"].append(os.path.join(self.main_path,"images","%s.jpg" % line))
+                    #data_f[one]["label"].append(os.path.join(self.main_path,"annotations","%s.png" % line))
+                if "length" in self.config:
+                    length = self.config["length"]
+                    data_f[one]["id"] = data_f[one]["id"][:length]
+                    data_f[one]["img"] = data_f[one]["img"][:length]
+                    data_f[one]["label"] = data_f[one]["label"][:length]
             data_len[one] = len(data_f[one]["label"])
 
         print("len:%s" % str(data_len))
@@ -49,29 +59,32 @@ class dataset():
     def get_data(self):
         data = {}
         for category in self.categorys:
-            data[category] = {"img":[],"label":[],"filename":[]}
+            data[category] = {"img":[],"label":[],"id":[]}
         return data
 
     def reset_info(self):
-        info = {}
-        info["epoch"] = {} 
-        info["index"] = {}
-        info["perm"] = {}
+        self.info = {}
+        self.info["epoch"] = {} 
+        self.info["index"] = {}
+        self.info["perm"] = {}
         for category in self.categorys:
-            info["epoch"][category] = 0
-            info["index"][category] = 0
+            self.info["epoch"][category] = 0
+            self.info["index"][category] = 0
             perm = np.arange(self.data_len[category])
             np.random.shuffle(perm)
-            info["perm"][category] = perm
-        return info
+            self.info["perm"][category] = perm
+        return self.info
 
-    def get_info(self,key="epoch",category="train"):
+    def get_info(self,key="epoch",category=None):
+        if category is None: category = self.default_category
         return self.info[key][category]
 
-    def get_data_len(self,category="train"):
+    def get_data_len(self,category=None):
+        if category is None: category = self.default_category
         return self.data_len[category]
 
-    def get_cur_epoch(self,category="train"):
+    def get_cur_epoch(self,category=None):
+        if category is None: category = self.default_category
         return self.info["epoch"][category]
 
 
@@ -92,10 +105,11 @@ class dataset_np(dataset):
                 img,label = self.preprocess(img,label)
                 data[category]["img"].append(img)
                 data[category]["label"].append(label)
-                data[category]["filename"].append(os.path.basename(img_f)[:-4])
+                data[category]["id"].append(os.path.basename(img_f)[:-4])
         return data
 
-    def next_batch(self,batch_size=10,category="train",left_remove=True):
+    def next_batch(self,batch_size=10,category=None,left_remove=True):
+        if category is None: category = self.default_category
         if batch_size is None:
             batch_size = self.config.get("batch_size",1)
         end_index = self.info["index"][category] + batch_size
@@ -151,9 +165,10 @@ class dataset_tf(dataset):
 
     def init(self):
         self.data_f,self.data_len = self.get_data_f()
-        self.info = self.reset_info()
+        self.reset_info()
 
-    def next_batch(self,category="train",batch_size=None,epoches=-1):
+    def next_batch(self,category=None,batch_size=None,epoches=-1):
+        if category is None: category = self.default_category
         if batch_size is None:
             batch_size = self.config.get("batch_size",1)
         dataset = tf.data.Dataset.from_tensor_slices({
@@ -173,9 +188,11 @@ class dataset_tf(dataset):
             label = tf.expand_dims(label,axis=0)
             if category == "train":
                 img,label = self.image_preprocess(img,label,random_scale=True,flip=True,rotate=False)
+                #img,label = self.image_preprocess(img,label,random_scale=False,flip=False,rotate=False)
             else:
                 img,label = self.image_preprocess(img,label,random_scale=False)
 
+            #img,label = self.image_preprocess(img,label,random_scale=True,flip=True,rotate=False)
             img = tf.reshape(img,[self.h,self.w,3])
             label = tf.reshape(label,[self.h,self.w,1])
 
@@ -186,9 +203,9 @@ class dataset_tf(dataset):
         dataset = dataset.map(m)
         dataset = dataset.batch(batch_size)
         iterator = dataset.make_initializable_iterator()
-        img,label,filename = iterator.get_next()
+        img,label,id = iterator.get_next()
             
-        return img,label,filename,iterator
+        return img,label,id,iterator
 
     def image_preprocess(self,img,label,random_scale=True,flip=False,rotate=False):
         # input img and label shape [None, h, w, c]
@@ -257,21 +274,26 @@ def test_dataset_np():
         i+=1
 
 def test_dataset_tf():
-    data= dataset_tf({"input_size":(240,240),"categorys":["val"]})
-    x,y,f,iterator = data.next_batch(category="val",batch_size=4,epoches=1)
+    data= dataset_tf({"input_size":(321,321),"categorys":["input"]})
+    x,y,f,iterator = data.next_batch(category="input",batch_size=1,epoches=1)
     sess = tf.Session()
     sess.run(iterator.initializer)
     i = 0
+    data = {}
     try:
         while(True):
             if i % 10 == 0: print("i:%d" % i)
-            _ = sess.run([x,y,f])
+            a,b,_ = sess.run([x,y,f])
+            data[str(i)] = {"x":a,"y":b}
+            imgio.imsave("input/%d_ser_x.png" % i, np.reshape(a,(321,321,3))/255)
+            imgio.imsave("input/%d_ser_y.png" % i, np.reshape(b,(321,321)))
             i += 1
     except tf.errors.OutOfRangeError:
         print("outofrange")
     except Exception as e:
         print("exception %s" % repr(e))
     finally:
+        np.save("input/ser.npy",data)
         print("finally")
 
 if __name__ == "__main__":
