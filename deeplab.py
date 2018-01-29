@@ -1,14 +1,14 @@
 import os
 import sys
 os.environ["CUDA_VISIBLE_DEVICES"] = sys.argv[1]
-
-import tensorflow as tf
-import numpy as np
-from network import Network
-from estep import estep as _estep
-from dataset import dataset_tf as dataset
-from metrics import metrics_update
 import time
+import numpy as np
+import tensorflow as tf
+
+from pythonlib.network import Network
+from pythonlib.estep import estep as _estep
+from pythonlib.metrics import metrics_update
+from pythonlib.dataset import dataset_tf as dataset
 
 class ADAPT(Network):
     def __init__(self,config):
