@@ -82,24 +82,3 @@ def estep_py(feature_map,label,suppress_others,num_iter,margin_others,bg_p,fg_p)
     feature_map += np.reshape(before_mean_value-after_mean_value,[-1,1,1,1])
     #print("after_mean_value:%s" % str(after_mean_value))
     return feature_map
-
-
-if __name__ == "__main__":
-    with open("tmp.pickle","rb") as f:
-        a = pickle.load(f)
-    f = a["f"]
-    l = a["l"]
-    #f = np.random.randn(10,100,100,10)
-    #l = np.array([[1,1,0,0,1,0,0,0,1,1],[1,0,1,0,0,0,1,1,1,1],[1,1,0,0,1,0,0,0,1,1],[1,0,1,0,0,0,1,1,1,1],[1,1,0,0,1,0,0,0,1,1],[1,0,1,0,0,0,1,1,1,1],[1,1,0,0,1,0,0,0,1,1],[1,0,1,0,0,0,1,1,1,1],[1,1,0,0,1,0,0,0,1,1],[1,0,1,0,0,0,1,1,1,1],[1,1,0,0,1,0,0,0,1,1],[1,0,1,0,0,0,1,1,1,1],[1,1,0,0,1,0,0,0,1,1],[1,0,1,0,0,0,1,1,1,1],[1,1,0,0,1,0,0,0,1,1],[1,0,1,0,0,0,1,1,1,1],[1,1,0,0,1,0,0,0,1,1],[1,0,1,0,0,0,1,1,1,1],[1,1,0,0,1,0,0,0,1,1],[1,0,1,0,0,0,1,1,1,1]][:10])
-    #f = np.array([[[[1,2,3]],[[3,2,1]]],[[[4,5,6]],[[7,8,9]]]],dtype=np.float32) # shape: 2x2x1x3
-    #l = np.array([[[1],[2]],[[1],[0]]]) # shape: 2x3
-    #f = np.array([[[[1,2,3]],[[3,2,1]]]],dtype=np.float32) # shape: 2x2x1x3
-    #l = np.array([[1,1,1]]) # shape: 2x3
-    #print("before:%s" % str(f))
-    #print("before:%s" % str(l))
-    start_time = time.time()
-    #print("start_time:%f" % start_time)
-    t = estep(f,l,use_c=True)
-    #t = estep(f,l)
-    end_time = time.time()
-    print("duration time:%f" % (end_time-start_time))

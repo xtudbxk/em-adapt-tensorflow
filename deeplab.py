@@ -5,10 +5,9 @@ import time
 import numpy as np
 import tensorflow as tf
 
-from pythonlib.network import Network
-from pythonlib.estep import estep as _estep
-from pythonlib.metrics import metrics_update
-from pythonlib.dataset import dataset_tf as dataset
+from network import Network
+from estep import estep as _estep
+from dataset import dataset
 
 class ADAPT(Network):
     def __init__(self,config):
@@ -323,6 +322,6 @@ if __name__ == "__main__":
     category_num = 21
     epoches = 20
     data = dataset({"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num})
-    #adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"init_model_path":"./model/init.npy","accum_num":5})
-    adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"model_path":"old_saver/20180120-6-0/norm-47999","accum_num":5})
+    adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"init_model_path":"./model/init.npy","accum_num":5})
+    #adapt = ADAPT({"data":data,"batch_size":batch_size,"input_size":input_size,"epoches":epoches,"category_num":category_num,"model_path":"old_saver/20180120-6-0/norm-47999","accum_num":5})
     adapt.train(base_lr=0.00001,weight_decay=1e-5,momentum=0.9,batch_size=batch_size,epoches=epoches)
