@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import tensorflow as tf
 import skimage.color as imgco
 
 class dataset():
