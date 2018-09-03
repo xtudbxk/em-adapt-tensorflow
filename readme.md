@@ -38,3 +38,7 @@ then, you just input the following sentence to train it.
 ### Result
 
 the final result on the validation dataset of pascal voc 2012 is 37.98% miou while it is 38.2% in the paper. Note that we use the crf while test the trained model, and you can look through my other project to see how to perform densecrf using python.
+
+
+### Evaluation
+I just release a [project](https://github.com/xtudbxk/semantic-segmentation-metrics) to provide the code for evaluation.
