@@ -24,7 +24,7 @@ for using this code, you have to do something else:
 
 ##### 1. Download the data and model
 
-1. for pascal data, please referring to its [official website](http://host.robots.ox.ac.uk/pascal/VOC/). Just download it and extract in the ./ .
+1. for training data, please referring to [pascal_voc](http://host.robots.ox.ac.uk/pascal/VOC/) and [SBD](http://home.bharathh.info/pubs/codes/SBD/download.html). Just download it and extract in the ./ .
 2. for the init.model, please referring to [EM-ADAPT](http://liangchiehchen.com/projects/Datasets.html). And download it and extract in the mode/ .
 
 For more details, you can referring to the correspond code files or leave a message in the issue.
